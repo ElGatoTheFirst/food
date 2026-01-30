@@ -1,454 +1,147 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🥗 Food Freshness Scanner</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥗</text></svg>">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-            min-height: 100vh;
-            color: #fff;
-            padding: 20px;
-        }
-        .container { max-width: 1200px; margin: 0 auto; }
-        header { text-align: center; margin-bottom: 30px; }
-        header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            background: linear-gradient(90deg, #00d4ff, #00ff88);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        header p { color: #aaa; font-size: 1.1rem; }
-        .main-content { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-        @media (max-width: 900px) { .main-content { grid-template-columns: 1fr; } }
-        .card {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            padding: 25px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .card h2 { font-size: 1.3rem; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-        .camera-container { position: relative; width: 100%; border-radius: 15px; overflow: hidden; background: #000; }
-        #video { width: 100%; display: block; border-radius: 15px; }
-        #canvas { display: none; }
-        .camera-overlay {
-            position: absolute; top: 10px; right: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 8px 15px; border-radius: 20px; font-size: 0.9rem;
-        }
-        .recording-dot {
-            display: inline-block; width: 10px; height: 10px;
-            background: #ff4444; border-radius: 50%; margin-right: 8px;
-            animation: pulse 1s infinite;
-        }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .controls { display: flex; gap: 15px; margin-top: 20px; }
-        .btn {
-            flex: 1; padding: 15px 25px; border: none; border-radius: 12px;
-            font-size: 1rem; font-weight: 600; cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-        }
-        .btn-primary { background: linear-gradient(135deg, #00d4ff, #0099ff); color: #fff; }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3); }
-        .btn-danger { background: linear-gradient(135deg, #ff4444, #cc0000); color: #fff; }
-        .btn-danger:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(255, 68, 68, 0.3); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
-        .progress-section { margin-top: 25px; }
-        .progress-header { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem; }
-        .progress-bar { height: 12px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; overflow: hidden; }
-        .progress-fill {
-            height: 100%; background: linear-gradient(90deg, #00d4ff, #00ff88);
-            border-radius: 10px; transition: width 0.3s ease; width: 0%;
-        }
-        .result-card { text-align: center; padding: 30px; }
-        .result-icon { font-size: 5rem; margin-bottom: 20px; }
-        .result-label { font-size: 1.8rem; font-weight: 700; margin-bottom: 10px; }
-        .result-confidence { font-size: 1.1rem; color: #aaa; margin-bottom: 25px; }
-        .freshness-indicator { display: inline-block; padding: 10px 30px; border-radius: 30px; font-weight: 600; font-size: 1.1rem; }
-        .fresh { background: linear-gradient(135deg, #00ff88, #00cc6a); color: #000; }
-        .medium { background: linear-gradient(135deg, #ffcc00, #ff9900); color: #000; }
-        .rotten { background: linear-gradient(135deg, #ff4444, #cc0000); color: #fff; }
-        .live-predictions { margin-top: 25px; }
-        .live-predictions h3 { font-size: 1rem; margin-bottom: 15px; color: #aaa; }
-        .prediction-list { max-height: 200px; overflow-y: auto; }
-        .prediction-item {
-            display: flex; justify-content: space-between; padding: 10px 15px;
-            background: rgba(255, 255, 255, 0.05); border-radius: 8px; margin-bottom: 8px; font-size: 0.9rem;
-        }
-        .prediction-item .label { color: #00d4ff; }
-        .prediction-item .count { color: #00ff88; font-weight: 600; }
-        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 20px; }
-        .stat-box { background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 12px; text-align: center; }
-        .stat-value { font-size: 1.5rem; font-weight: 700; color: #00d4ff; }
-        .stat-label { font-size: 0.8rem; color: #aaa; margin-top: 5px; }
-        .status { padding: 15px; border-radius: 10px; margin-top: 20px; text-align: center; }
-        .status.info { background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); }
-        .status.error { background: rgba(255, 68, 68, 0.1); border: 1px solid rgba(255, 68, 68, 0.3); }
-        .status.success { background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); }
-        .history-section { margin-top: 30px; }
-        .history-item {
-            display: flex; align-items: center; gap: 15px; padding: 15px;
-            background: rgba(255, 255, 255, 0.05); border-radius: 12px; margin-bottom: 10px;
-        }
-        .history-time { color: #aaa; font-size: 0.85rem; min-width: 80px; }
-        .history-result { flex: 1; font-weight: 600; }
-        .history-badge { padding: 5px 15px; border-radius: 20px; font-size: 0.85rem; }
-        #debugLog {
-            margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.5);
-            border-radius: 10px; font-family: monospace; font-size: 12px;
-            max-height: 150px; overflow-y: auto; white-space: pre-wrap;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FridgeCam — Food Freshness Live</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🥗 Food Freshness Scanner</h1>
-            <p>Point your camera at oranges, tomatoes, or carrots to detect freshness</p>
-        </header>
-        <div class="main-content">
-            <div class="card">
-                <h2>📷 Live Camera</h2>
-                <div class="camera-container">
-                    <video id="video" autoplay playsinline></video>
-                    <canvas id="canvas"></canvas>
-                    <div class="camera-overlay" id="cameraOverlay" style="display: none;">
-                        <span class="recording-dot"></span>
-                        <span id="frameCount">0</span>/60 frames
-                    </div>
-                </div>
-                <div class="controls">
-                    <button class="btn btn-primary" id="startBtn" onclick="startScanning()">▶️ Start Scanning</button>
-                    <button class="btn btn-danger" id="stopBtn" onclick="stopScanning()" disabled>⏹️ Stop</button>
-                </div>
-                <div class="progress-section" id="progressSection" style="display: none;">
-                    <div class="progress-header">
-                        <span>Analyzing...</span>
-                        <span id="progressPercent">0%</span>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
-                </div>
-                <div class="stats-grid">
-                    <div class="stat-box"><div class="stat-value" id="totalFrames">0</div><div class="stat-label">Frames Sent</div></div>
-                    <div class="stat-box"><div class="stat-value" id="successFrames">0</div><div class="stat-label">Responses</div></div>
-                    <div class="stat-box"><div class="stat-value" id="cycleCount">0</div><div class="stat-label">Cycles Done</div></div>
-                </div>
-                <div class="status info" id="statusMessage">📹 Click "Start Scanning" to begin camera feed</div>
-                <div id="debugLog">Debug log:</div>
-            </div>
-            <div class="card">
-                <h2>📊 Detection Results</h2>
-                <div class="result-card" id="resultCard">
-                    <div class="result-icon" id="resultIcon">🔍</div>
-                    <div class="result-label" id="resultLabel">Waiting...</div>
-                    <div class="result-confidence" id="resultConfidence">Start scanning to detect food freshness</div>
-                    <div class="freshness-indicator" id="freshnessIndicator" style="display: none;">-</div>
-                </div>
-                <div class="live-predictions">
-                    <h3>📈 Live Vote Distribution (Current Cycle)</h3>
-                    <div class="prediction-list" id="predictionList">
-                        <div class="prediction-item"><span class="label">No data yet</span><span class="count">-</span></div>
-                    </div>
-                </div>
-                <div class="history-section">
-                    <h3 style="margin-bottom: 15px; color: #aaa;">🕐 Recent Results</h3>
-                    <div id="historyList">
-                        <div class="history-item">
-                            <span class="history-time">--:--</span>
-                            <span class="history-result">No results yet</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🧊📷</div>
+        <div>
+          <div class="title">FridgeCam</div>
+          <div class="subtitle">Food freshness — live (1 result/min)</div>
         </div>
+      </div>
+
+      <button id="btnSettings" class="icon-btn" aria-label="Settings">⚙️</button>
+    </header>
+
+    <main class="content">
+      <section class="card camera-card">
+        <div class="card-header">
+          <div class="h">Live Camera</div>
+          <div class="pill" id="pillStatus">Idle</div>
+        </div>
+
+        <div class="camera-wrap">
+          <video id="video" autoplay playsinline muted></video>
+          <div class="overlay">
+            <div class="overlay-top">
+              <div class="mini">
+                <div class="mini-label">Frames this minute</div>
+                <div class="mini-value"><span id="framesCount">0</span>/60</div>
+              </div>
+              <div class="mini">
+                <div class="mini-label">API</div>
+                <div class="mini-value" id="apiState">Not connected</div>
+              </div>
+            </div>
+
+            <div class="overlay-bottom">
+              <div class="progress">
+                <div class="bar" id="progressBar"></div>
+              </div>
+              <div class="hint" id="hintText">Tap Start to begin monitoring</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="btnStart" class="btn primary">Start Monitoring</button>
+          <button id="btnStop" class="btn ghost" disabled>Stop</button>
+        </div>
+
+        <p class="note">
+          Tip: Point the camera at the shelf area. This captures 1 frame/sec and decides
+          the final label once per minute using a majority vote.
+        </p>
+      </section>
+
+      <section class="card result-card">
+        <div class="card-header">
+          <div class="h">LIVE Result</div>
+          <div class="pill subtle" id="pillLive">Waiting…</div>
+        </div>
+
+        <div class="live-result">
+          <div class="big" id="liveLabel">—</div>
+          <div class="meta">
+            <div class="meta-item">
+              <div class="meta-k">Confidence</div>
+              <div class="meta-v" id="liveConf">—</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-k">Majority</div>
+              <div class="meta-v" id="liveMajority">—</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-k">Minute</div>
+              <div class="meta-v" id="minuteIndex">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chips" id="topChips"></div>
+      </section>
+
+      <section class="card history-card">
+        <div class="card-header">
+          <div class="h">History</div>
+          <button id="btnClear" class="btn small ghost">Clear</button>
+        </div>
+
+        <div id="historyList" class="history-list">
+          <div class="empty">No results yet.</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Settings sheet -->
+    <div id="sheetBackdrop" class="backdrop hidden"></div>
+    <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Settings">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Settings</div>
+
+      <label class="field">
+        <span class="field-label">API Base URL</span>
+        <input id="apiUrl" type="url" placeholder="https://your-space.hf.space" />
+        <span class="field-help">Must allow CORS from your GitHub Pages domain.</span>
+      </label>
+
+      <div class="row">
+        <label class="field inline">
+          <span class="field-label">Frames / second</span>
+          <input id="fps" type="number" min="1" max="2" step="1" value="1" />
+        </label>
+
+        <label class="field inline">
+          <span class="field-label">Send size (px)</span>
+          <input id="sendSize" type="number" min="160" max="640" step="10" value="320" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="field-label">Minute window (frames)</span>
+        <input id="windowFrames" type="number" min="30" max="120" step="10" value="60" />
+      </label>
+
+      <div class="actions">
+        <button id="btnSave" class="btn primary">Save</button>
+        <button id="btnClose" class="btn ghost">Close</button>
+      </div>
+
+      <p class="note">
+        On iPhone/Safari, the camera requires HTTPS and user interaction (tapping Start).
+      </p>
     </div>
 
-    <script>
-        const BASE_URL = "https://elgatito1-food-classifier.hf.space";
-        const FRAMES_PER_CYCLE = 60;
-        const FRAME_INTERVAL = 1000;
+    <canvas id="canvas" class="hidden"></canvas>
+  </div>
 
-        let video, canvas, ctx;
-        let isScanning = false;
-        let frameTimer = null;
-        let currentFrameCount = 0;
-        let successCount = 0;
-        let cycleCount = 0;
-        let predictions = {};
-        let history = [];
-
-        const DISPLAY_INFO = {
-            "🍊 Orange - Rotten": { icon: "🍊", food: "Orange", freshness: "Rotten", class: "rotten" },
-            "🍊 Orange - Fresh": { icon: "🍊", food: "Orange", freshness: "Fresh", class: "fresh" },
-            "🍊 Orange - Medium Fresh": { icon: "🍊", food: "Orange", freshness: "Medium", class: "medium" },
-            "🍅 Tomato - Rotten": { icon: "🍅", food: "Tomato", freshness: "Rotten", class: "rotten" },
-            "🍅 Tomato - Fresh": { icon: "🍅", food: "Tomato", freshness: "Fresh", class: "fresh" },
-            "🍅 Tomato - Medium Fresh": { icon: "🍅", food: "Tomato", freshness: "Medium", class: "medium" },
-            "🥕 Carrot - Rotten": { icon: "🥕", food: "Carrot", freshness: "Rotten", class: "rotten" },
-            "🥕 Carrot - Fresh": { icon: "🥕", food: "Carrot", freshness: "Fresh", class: "fresh" },
-            "🥕 Carrot - Medium Fresh": { icon: "🥕", food: "Carrot", freshness: "Medium", class: "medium" },
-        };
-
-        function debugLog(msg) {
-            const log = document.getElementById("debugLog");
-            const time = new Date().toLocaleTimeString();
-            log.textContent += `\n[${time}] ${msg}`;
-            log.scrollTop = log.scrollHeight;
-            console.log(msg);
-        }
-
-        document.addEventListener("DOMContentLoaded", () => {
-            video = document.getElementById("video");
-            canvas = document.getElementById("canvas");
-            ctx = canvas.getContext("2d");
-            initCamera();
-        });
-
-        async function initCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment", width: 640, height: 480 }
-                });
-                video.srcObject = stream;
-                updateStatus("✅ Camera ready! Click 'Start Scanning' to begin.", "success");
-                debugLog("Camera initialized");
-            } catch (err) {
-                console.error("Camera error:", err);
-                updateStatus("❌ Camera access denied. Please allow camera permissions.", "error");
-                debugLog("Camera error: " + err.message);
-            }
-        }
-
-        function startScanning() {
-            if (isScanning) return;
-            isScanning = true;
-            currentFrameCount = 0;
-            successCount = 0;
-            predictions = {};
-            document.getElementById("startBtn").disabled = true;
-            document.getElementById("stopBtn").disabled = false;
-            document.getElementById("cameraOverlay").style.display = "block";
-            document.getElementById("progressSection").style.display = "block";
-            updateStatus("🔄 Scanning in progress... Capturing 1 frame/second", "info");
-            updateProgress(0);
-            updatePredictionList();
-            debugLog("Starting scan...");
-            captureAndSend();
-            frameTimer = setInterval(captureAndSend, FRAME_INTERVAL);
-        }
-
-        function stopScanning() {
-            isScanning = false;
-            if (frameTimer) { clearInterval(frameTimer); frameTimer = null; }
-            document.getElementById("startBtn").disabled = false;
-            document.getElementById("stopBtn").disabled = true;
-            document.getElementById("cameraOverlay").style.display = "none";
-            updateStatus("⏹️ Scanning stopped.", "info");
-            debugLog("Scanning stopped");
-            if (Object.keys(predictions).length > 0) finalizeCycle();
-        }
-
-        async function callGradioAPI(imageData) {
-            try {
-                debugLog("Sending frame to API...");
-                
-                // Try the queue-based API
-                const queueResponse = await fetch(`${BASE_URL}/gradio_api/call/predict`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ data: [imageData] })
-                });
-
-                debugLog(`Queue response status: ${queueResponse.status}`);
-                
-                if (!queueResponse.ok) {
-                    const errorText = await queueResponse.text();
-                    debugLog(`Queue error: ${errorText}`);
-                    throw new Error(`Queue failed: ${queueResponse.status}`);
-                }
-
-                const queueResult = await queueResponse.json();
-                debugLog(`Queue result: ${JSON.stringify(queueResult)}`);
-                
-                const eventId = queueResult.event_id;
-                if (!eventId) {
-                    debugLog("No event_id received");
-                    return null;
-                }
-
-                // Get the result
-                const resultResponse = await fetch(`${BASE_URL}/gradio_api/call/predict/${eventId}`);
-                debugLog(`Result response status: ${resultResponse.status}`);
-                
-                if (!resultResponse.ok) {
-                    throw new Error(`Result failed: ${resultResponse.status}`);
-                }
-
-                const text = await resultResponse.text();
-                debugLog(`Raw response: ${text.substring(0, 200)}...`);
-                
-                const lines = text.split('\n');
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-                            debugLog(`Parsed data: ${JSON.stringify(data)}`);
-                            if (data && data.length > 0) {
-                                return data[0];
-                            }
-                        } catch (e) {
-                            debugLog(`Parse error: ${e.message}`);
-                        }
-                    }
-                }
-                return null;
-            } catch (err) {
-                debugLog(`API error: ${err.message}`);
-                return null;
-            }
-        }
-
-        async function captureAndSend() {
-            if (!isScanning) return;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-            const imageData = canvas.toDataURL("image/jpeg", 0.8);
-            
-            currentFrameCount++;
-            document.getElementById("frameCount").textContent = currentFrameCount;
-            document.getElementById("totalFrames").textContent = 
-                parseInt(document.getElementById("totalFrames").textContent) + 1;
-            updateProgress((currentFrameCount / FRAMES_PER_CYCLE) * 100);
-
-            debugLog(`Frame ${currentFrameCount} captured`);
-
-            const result = await callGradioAPI(imageData);
-            if (result) {
-                debugLog(`Got result: ${JSON.stringify(result)}`);
-                processResponse(result);
-            } else {
-                debugLog("No result returned");
-            }
-            
-            if (currentFrameCount >= FRAMES_PER_CYCLE) finalizeCycle();
-        }
-
-        function processResponse(labelData) {
-            successCount++;
-            document.getElementById("successFrames").textContent = successCount;
-            let topLabel = null;
-            
-            debugLog(`Processing: ${JSON.stringify(labelData)}`);
-            
-            if (typeof labelData === "object") {
-                if (labelData.label) {
-                    topLabel = labelData.label;
-                } else if (labelData.confidences && labelData.confidences.length > 0) {
-                    let maxConf = 0;
-                    for (const item of labelData.confidences) {
-                        if (item.confidence > maxConf) { maxConf = item.confidence; topLabel = item.label; }
-                    }
-                } else {
-                    let maxConf = 0;
-                    for (const [label, conf] of Object.entries(labelData)) {
-                        if (typeof conf === 'number' && conf > maxConf) { maxConf = conf; topLabel = label; }
-                    }
-                }
-            } else if (typeof labelData === "string") {
-                topLabel = labelData;
-            }
-
-            debugLog(`Top label: ${topLabel}`);
-            
-            if (topLabel) {
-                predictions[topLabel] = (predictions[topLabel] || 0) + 1;
-                updatePredictionList();
-            }
-        }
-
-        function finalizeCycle() {
-            let maxCount = 0, winner = null;
-            for (const [label, count] of Object.entries(predictions)) {
-                if (count > maxCount) { maxCount = count; winner = label; }
-            }
-            if (winner) {
-                cycleCount++;
-                document.getElementById("cycleCount").textContent = cycleCount;
-                displayFinalResult(winner, maxCount, successCount);
-                addToHistory(winner);
-            }
-            if (isScanning) {
-                currentFrameCount = 0;
-                successCount = 0;
-                predictions = {};
-                updateProgress(0);
-                updatePredictionList();
-                updateStatus("🔄 Starting new cycle...", "info");
-            }
-        }
-
-        function displayFinalResult(winner, voteCount, totalVotes) {
-            const info = DISPLAY_INFO[winner] || { icon: "❓", food: "Unknown", freshness: "Unknown", class: "medium" };
-            document.getElementById("resultIcon").textContent = info.icon;
-            document.getElementById("resultLabel").textContent = `${info.food} Detected`;
-            document.getElementById("resultConfidence").textContent = 
-                `${voteCount}/${totalVotes} frames agreed (${Math.round(voteCount/totalVotes*100)}% confidence)`;
-            const indicator = document.getElementById("freshnessIndicator");
-            indicator.style.display = "inline-block";
-            indicator.textContent = info.freshness;
-            indicator.className = `freshness-indicator ${info.class}`;
-            updateStatus(`✅ Cycle complete! Detected: ${info.food} - ${info.freshness}`, "success");
-        }
-
-        function updateProgress(percent) {
-            document.getElementById("progressFill").style.width = `${percent}%`;
-            document.getElementById("progressPercent").textContent = `${Math.round(percent)}%`;
-        }
-
-        function updateStatus(message, type) {
-            const status = document.getElementById("statusMessage");
-            status.textContent = message;
-            status.className = `status ${type}`;
-        }
-
-        function updatePredictionList() {
-            const list = document.getElementById("predictionList");
-            if (Object.keys(predictions).length === 0) {
-                list.innerHTML = `<div class="prediction-item"><span class="label">Collecting data...</span><span class="count">0 votes</span></div>`;
-                return;
-            }
-            const sorted = Object.entries(predictions).sort((a, b) => b[1] - a[1]);
-            list.innerHTML = sorted.map(([label, count]) => 
-                `<div class="prediction-item"><span class="label">${label}</span><span class="count">${count} votes</span></div>`
-            ).join("");
-        }
-
-        function addToHistory(winner) {
-            const now = new Date();
-            const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-            const info = DISPLAY_INFO[winner] || { food: "Unknown", freshness: "Unknown", class: "medium" };
-            history.unshift({ time, label: winner, info });
-            if (history.length > 5) history.pop();
-            const historyList = document.getElementById("historyList");
-            historyList.innerHTML = history.map(item => `
-                <div class="history-item">
-                    <span class="history-time">${item.time}</span>
-                    <span class="history-result">${item.info.icon} ${item.info.food}</span>
-                    <span class="history-badge ${item.info.class}">${item.info.freshness}</span>
-                </div>
-            `).join("");
-        }
-    </script>
+  <script src="app.js"></script>
 </body>
 </html>
