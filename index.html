@@ -101,6 +101,11 @@
         .history-time { color: #aaa; font-size: 0.85rem; min-width: 80px; }
         .history-result { flex: 1; font-weight: 600; }
         .history-badge { padding: 5px 15px; border-radius: 20px; font-size: 0.85rem; }
+        #debugLog {
+            margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.5);
+            border-radius: 10px; font-family: monospace; font-size: 12px;
+            max-height: 150px; overflow-y: auto; white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
@@ -139,6 +144,7 @@
                     <div class="stat-box"><div class="stat-value" id="cycleCount">0</div><div class="stat-label">Cycles Done</div></div>
                 </div>
                 <div class="status info" id="statusMessage">📹 Click "Start Scanning" to begin camera feed</div>
+                <div id="debugLog">Debug log:</div>
             </div>
             <div class="card">
                 <h2>📊 Detection Results</h2>
@@ -193,6 +199,14 @@
             "🥕 Carrot - Medium Fresh": { icon: "🥕", food: "Carrot", freshness: "Medium", class: "medium" },
         };
 
+        function debugLog(msg) {
+            const log = document.getElementById("debugLog");
+            const time = new Date().toLocaleTimeString();
+            log.textContent += `\n[${time}] ${msg}`;
+            log.scrollTop = log.scrollHeight;
+            console.log(msg);
+        }
+
         document.addEventListener("DOMContentLoaded", () => {
             video = document.getElementById("video");
             canvas = document.getElementById("canvas");
@@ -207,9 +221,11 @@
                 });
                 video.srcObject = stream;
                 updateStatus("✅ Camera ready! Click 'Start Scanning' to begin.", "success");
+                debugLog("Camera initialized");
             } catch (err) {
                 console.error("Camera error:", err);
                 updateStatus("❌ Camera access denied. Please allow camera permissions.", "error");
+                debugLog("Camera error: " + err.message);
             }
         }
 
@@ -226,6 +242,7 @@
             updateStatus("🔄 Scanning in progress... Capturing 1 frame/second", "info");
             updateProgress(0);
             updatePredictionList();
+            debugLog("Starting scan...");
             captureAndSend();
             frameTimer = setInterval(captureAndSend, FRAME_INTERVAL);
         }
@@ -237,47 +254,66 @@
             document.getElementById("stopBtn").disabled = true;
             document.getElementById("cameraOverlay").style.display = "none";
             updateStatus("⏹️ Scanning stopped.", "info");
+            debugLog("Scanning stopped");
             if (Object.keys(predictions).length > 0) finalizeCycle();
         }
 
-        // FIXED: Use /gradio_api/ endpoint
         async function callGradioAPI(imageData) {
             try {
-                // Step 1: Queue the prediction
+                debugLog("Sending frame to API...");
+                
+                // Try the queue-based API
                 const queueResponse = await fetch(`${BASE_URL}/gradio_api/call/predict`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ data: [imageData] })
                 });
 
+                debugLog(`Queue response status: ${queueResponse.status}`);
+                
                 if (!queueResponse.ok) {
+                    const errorText = await queueResponse.text();
+                    debugLog(`Queue error: ${errorText}`);
                     throw new Error(`Queue failed: ${queueResponse.status}`);
                 }
 
                 const queueResult = await queueResponse.json();
+                debugLog(`Queue result: ${JSON.stringify(queueResult)}`);
+                
                 const eventId = queueResult.event_id;
+                if (!eventId) {
+                    debugLog("No event_id received");
+                    return null;
+                }
 
-                // Step 2: Get the result
+                // Get the result
                 const resultResponse = await fetch(`${BASE_URL}/gradio_api/call/predict/${eventId}`);
+                debugLog(`Result response status: ${resultResponse.status}`);
                 
                 if (!resultResponse.ok) {
                     throw new Error(`Result failed: ${resultResponse.status}`);
                 }
 
                 const text = await resultResponse.text();
-                const lines = text.split('\n');
+                debugLog(`Raw response: ${text.substring(0, 200)}...`);
                 
+                const lines = text.split('\n');
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
-                        const data = JSON.parse(line.slice(6));
-                        if (data && data.length > 0) {
-                            return data[0];
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            debugLog(`Parsed data: ${JSON.stringify(data)}`);
+                            if (data && data.length > 0) {
+                                return data[0];
+                            }
+                        } catch (e) {
+                            debugLog(`Parse error: ${e.message}`);
                         }
                     }
                 }
                 return null;
             } catch (err) {
-                console.error("API error:", err);
+                debugLog(`API error: ${err.message}`);
                 return null;
             }
         }
@@ -295,8 +331,16 @@
                 parseInt(document.getElementById("totalFrames").textContent) + 1;
             updateProgress((currentFrameCount / FRAMES_PER_CYCLE) * 100);
 
+            debugLog(`Frame ${currentFrameCount} captured`);
+
             const result = await callGradioAPI(imageData);
-            if (result) processResponse(result);
+            if (result) {
+                debugLog(`Got result: ${JSON.stringify(result)}`);
+                processResponse(result);
+            } else {
+                debugLog("No result returned");
+            }
+            
             if (currentFrameCount >= FRAMES_PER_CYCLE) finalizeCycle();
         }
 
@@ -304,6 +348,8 @@
             successCount++;
             document.getElementById("successFrames").textContent = successCount;
             let topLabel = null;
+            
+            debugLog(`Processing: ${JSON.stringify(labelData)}`);
             
             if (typeof labelData === "object") {
                 if (labelData.label) {
@@ -323,6 +369,8 @@
                 topLabel = labelData;
             }
 
+            debugLog(`Top label: ${topLabel}`);
+            
             if (topLabel) {
                 predictions[topLabel] = (predictions[topLabel] || 0) + 1;
                 updatePredictionList();
