@@ -2,810 +2,925 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0f19" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+  />
   <title>Food Classifier</title>
 
   <style>
     :root{
-      --bg: #0b0f19;
-      --card: rgba(255,255,255,0.06);
-      --card2: rgba(255,255,255,0.08);
-      --text: rgba(255,255,255,0.92);
-      --muted: rgba(255,255,255,0.62);
-      --line: rgba(255,255,255,0.12);
-      --shadow: 0 18px 60px rgba(0,0,0,0.45);
-      --radius: 18px;
-      --radius2: 26px;
-      --good: rgba(0,255,170,0.55);
-      --bad: rgba(255,80,80,0.55);
-      --accent: rgba(120,65,255,0.22);
-      --accent2: rgba(120,65,255,0.35);
+      --bg:#0b1220;
+      --card:#101a30;
+      --card2:#0e1628;
+      --text:#e9eefc;
+      --muted:#a6b0cf;
+      --line:rgba(255,255,255,.10);
+      --accent:#7c5cff;
+      --good:#26d07c;
+      --warn:#ffcf5a;
+      --bad:#ff5b6a;
+      --shadow: 0 12px 32px rgba(0,0,0,.35);
+      --radius:18px;
     }
-
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
     body{
       margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-      color: var(--text);
-      background:
-        radial-gradient(1200px 700px at 20% 0%, rgba(120,65,255,0.22), transparent 55%),
-        radial-gradient(900px 600px at 90% 20%, rgba(0,210,255,0.18), transparent 60%),
-        radial-gradient(900px 700px at 60% 110%, rgba(0,255,170,0.12), transparent 60%),
-        var(--bg);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      color:var(--text);
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(124,92,255,.22), transparent 55%),
+                  radial-gradient(900px 500px at 80% 20%, rgba(38,208,124,.14), transparent 55%),
+                  var(--bg);
     }
-
-    .topbar{
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 10px;
-      padding: 14px 16px;
-      background: rgba(11,15,25,0.72);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--line);
-    }
-
-    .brand{
-      display:flex;
-      gap: 12px;
-      align-items:center;
-      min-width: 0;
-    }
-    .logo{
-      width: 44px;
-      height: 44px;
-      display:grid;
-      place-items:center;
-      border-radius: 14px;
-      background: rgba(255,255,255,0.10);
-      border: 1px solid var(--line);
-      flex: 0 0 auto;
-    }
-    .brand-text{ min-width:0; }
-    .brand-text h1{
-      margin:0;
-      font-size: 16px;
-      letter-spacing: .2px;
-      line-height: 1.15;
-    }
-    .sub{
-      margin:3px 0 0;
-      font-size: 12px;
-      color: var(--muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 45vw;
-    }
-
-    .actions{
-      display:flex;
-      gap:10px;
-      align-items:center;
-      flex: 0 0 auto;
-    }
-
-    .btn{
-      appearance:none;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.06);
-      color: var(--text);
-      border-radius: 14px;
-      padding: 10px 12px;
-      font-weight: 700;
-      font-size: 13px;
-      cursor:pointer;
-      transition: transform .06s ease, background .15s ease;
-      user-select:none;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .btn:active{ transform: scale(0.98); }
-    .btn:disabled{ opacity: .55; cursor:not-allowed; }
-    .btn.primary{
-      background: var(--accent);
-      border-color: var(--accent2);
-    }
-    .btn.primary:hover{ background: rgba(120,65,255,0.28); }
 
     .wrap{
-      width: min(1100px, 100%);
-      margin: 16px auto 26px;
-      padding: 0 14px 18px;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 18px 14px 26px;
+      padding-bottom: calc(26px + env(safe-area-inset-bottom));
     }
 
-    .card{
-      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.05));
-      border: 1px solid var(--line);
-      border-radius: var(--radius2);
-      box-shadow: var(--shadow);
-    }
-
-    .camera-card{ padding: 14px; }
-
-    .card-head{
+    header{
       display:flex;
       align-items:center;
       justify-content:space-between;
-      gap: 10px;
-      padding: 10px 8px 12px;
+      gap:12px;
+      margin: 6px 0 14px;
     }
-    .card-head h2{
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .title h1{
       margin:0;
-      font-size: 14px;
-      color: rgba(255,255,255,0.88);
-      letter-spacing: .2px;
+      font-size: 20px;
+      letter-spacing:.2px;
+      line-height:1.1;
     }
-
-    .status{
-      display:flex;
-      gap:8px;
-      align-items:center;
+    .title p{
+      margin:0;
+      font-size: 13px;
       color: var(--muted);
-      font-size: 12px;
-      white-space: nowrap;
-    }
-    .dot{
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.22);
-      border: 1px solid var(--line);
-      flex: 0 0 auto;
-    }
-    .dot.on{ background: var(--good); border-color: rgba(0,255,170,0.6); }
-    .dot.err{ background: var(--bad); border-color: rgba(255,80,80,0.6); }
-
-    .camera{
-      position: relative;
-      overflow: hidden;
-      border-radius: var(--radius2);
-      border: 1px solid var(--line);
-      background: rgba(0,0,0,0.25);
-    }
-
-    video{
-      width: 100%;
-      height: auto;
-      display:block;
-      aspect-ratio: 4 / 3;
-      object-fit: cover;
-    }
-
-    .overlay{
-      position:absolute;
-      top: 12px;
-      left: 12px;
-      right: 12px;
-      display:flex;
-      justify-content:flex-start;
-      pointer-events:none;
     }
 
     .pill{
       display:inline-flex;
-      gap:8px;
       align-items:center;
+      gap:8px;
       padding: 8px 10px;
       border-radius: 999px;
-      background: rgba(0,0,0,0.35);
-      border: 1px solid rgba(255,255,255,0.16);
-      backdrop-filter: blur(10px);
-    }
-    .pill-label{ font-size: 12px; color: var(--muted); }
-    .pill-value{ font-size: 12px; font-weight: 800; }
-
-    .hint{
-      margin: 10px 6px 2px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
       color: var(--muted);
       font-size: 12px;
+      white-space:nowrap;
     }
+    .dot{
+      width:9px;height:9px;border-radius:999px;background:var(--warn);
+      box-shadow: 0 0 0 4px rgba(255,207,90,.14);
+    }
+    .dot.ok{ background: var(--good); box-shadow: 0 0 0 4px rgba(38,208,124,.14); }
+    .dot.bad{ background: var(--bad); box-shadow: 0 0 0 4px rgba(255,91,106,.14); }
 
     .grid{
       display:grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: 1.2fr .8fr;
       gap: 14px;
-      margin-top: 14px;
+    }
+    @media (max-width: 860px){
+      .grid{ grid-template-columns: 1fr; }
     }
 
-    .badge{
-      font-size: 12px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.07);
-      border: 1px solid var(--line);
-      color: rgba(255,255,255,0.85);
-      white-space: nowrap;
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
     }
-    .badge.ok{
-      background: rgba(0,255,170,0.10);
-      border-color: rgba(0,255,170,0.22);
-    }
-
-    .big{
-      padding: 6px 14px 12px;
-    }
-    .big-label{
-      font-size: 22px;
-      font-weight: 900;
-      letter-spacing: .2px;
-      line-height: 1.15;
-      word-break: break-word;
-    }
-    .big-sub{
-      margin-top: 6px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .sep{
-      height: 1px;
-      background: var(--line);
-      margin: 10px 0;
-    }
-
-    .small-title{
-      margin: 0 14px 8px;
-      font-size: 12px;
-      color: var(--muted);
-      font-weight: 800;
-      letter-spacing: .15px;
-    }
-
-    .list{
-      margin: 0 14px 14px 34px;
-      padding: 0;
-      color: rgba(255,255,255,0.88);
-    }
-    .list li{
-      margin: 8px 0;
-      font-size: 13px;
-      line-height: 1.2;
-    }
-    .krow{
+    .card .head{
       display:flex;
+      align-items:center;
       justify-content:space-between;
-      gap: 10px;
+      gap:10px;
+      padding: 12px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(0,0,0,.14);
     }
-    .kleft{ min-width:0; }
-    .kname{
-      font-weight: 800;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
+    .card .head h2{
+      margin:0;
+      font-size: 14px;
+      letter-spacing:.2px;
     }
-    .kprob{ color: var(--muted); font-variant-numeric: tabular-nums; }
+    .card .body{
+      padding: 12px;
+    }
 
-    .error{
-      margin: 0 14px 14px;
-      padding: 10px 12px;
+    .controls{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    button{
+      appearance:none;
+      border:0;
+      cursor:pointer;
       border-radius: 14px;
-      border: 1px solid rgba(255,80,80,0.35);
-      background: rgba(255,80,80,0.12);
-      color: rgba(255,255,255,0.92);
-      font-size: 12px;
+      padding: 11px 12px;
+      font-weight: 650;
+      font-size: 14px;
+      color: var(--text);
+      background: rgba(255,255,255,.08);
+      border: 1px solid var(--line);
+      transition: transform .05s ease, background .2s ease;
+    }
+    button:active{ transform: scale(.98); }
+    button.primary{
+      background: linear-gradient(180deg, rgba(124,92,255,.95), rgba(124,92,255,.75));
+      border: 1px solid rgba(124,92,255,.55);
+    }
+    button.danger{
+      background: rgba(255,91,106,.12);
+      border: 1px solid rgba(255,91,106,.35);
+    }
+    button:disabled{
+      opacity:.55;
+      cursor:not-allowed;
     }
 
-    .history{
-      list-style:none;
-      margin: 0 14px 14px;
-      padding: 0;
+    .seg{
+      display:inline-flex;
+      border:1px solid var(--line);
+      border-radius: 14px;
+      overflow:hidden;
+      background: rgba(255,255,255,.04);
+    }
+    .seg button{
+      border:0;
+      border-right:1px solid var(--line);
+      border-radius:0;
+      padding: 10px 12px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 650;
+      font-size: 13px;
+    }
+    .seg button:last-child{ border-right:0; }
+    .seg button.active{
+      background: rgba(124,92,255,.22);
+      color: var(--text);
+    }
+
+    .videoShell{
+      position:relative;
+      border-radius: 16px;
+      overflow:hidden;
+      background: #050816;
+      border:1px solid rgba(255,255,255,.10);
+    }
+    video{
+      width:100%;
+      height:auto;
+      display:block;
+      transform: scaleX(-1); /* default mirrored (front cam) */
+    }
+    .videoShell.back video{ transform:none; } /* back cam not mirrored */
+
+    .overlay{
+      position:absolute; inset:0;
+      pointer-events:none;
+      background:
+        radial-gradient(800px 400px at 50% 0%, rgba(124,92,255,.18), transparent 55%),
+        linear-gradient(180deg, rgba(0,0,0,.30), transparent 30%, transparent 70%, rgba(0,0,0,.25));
+    }
+    .scanBox{
+      position:absolute;
+      left: 12%;
+      top: 18%;
+      width: 76%;
+      height: 64%;
+      border-radius: 18px;
+      border: 2px solid rgba(255,255,255,.20);
+      box-shadow: 0 0 0 999px rgba(0,0,0,.12) inset;
+    }
+    .scanLine{
+      position:absolute;
+      left: 12%;
+      width: 76%;
+      height: 2px;
+      top: 20%;
+      background: linear-gradient(90deg, transparent, rgba(124,92,255,.95), transparent);
+      filter: drop-shadow(0 0 10px rgba(124,92,255,.55));
+      animation: scan 2.2s linear infinite;
+      opacity:.9;
+    }
+    @keyframes scan{
+      0%{ transform: translateY(0); opacity:.2; }
+      10%{ opacity:.9; }
+      50%{ opacity:.9; }
+      90%{ opacity:.9; }
+      100%{ transform: translateY(260px); opacity:.2; }
+    }
+
+    .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      margin-top: 10px;
+    }
+
+    .live{
       display:flex;
       flex-direction:column;
-      gap: 10px;
+      gap:6px;
+    }
+    .big{
+      font-size: 18px;
+      font-weight: 750;
+      letter-spacing:.2px;
+      margin:0;
+    }
+    .small{
+      margin:0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .klist{
+      margin: 10px 0 0;
+      padding: 0;
+      list-style:none;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .kitem{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding: 10px 10px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.08);
+    }
+    .kitem .lbl{
+      font-weight: 650;
+      font-size: 13px;
+    }
+    .kitem .prob{
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .verdict{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding: 12px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid rgba(255,255,255,.10);
+    }
+    .verdictTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+      font-size: 12px;
+      white-space:nowrap;
+    }
+    .badge strong{ color: var(--text); font-weight: 750; }
+    .muted{ color: var(--muted); }
+
+    .history{
+      margin: 10px 0 0;
+      padding: 0;
+      list-style:none;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
     }
     .history li{
       display:flex;
+      align-items:center;
       justify-content:space-between;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 16px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.05);
+      gap:10px;
+      padding: 10px 10px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.08);
     }
-    .hlabel{
-      font-weight: 900;
+    .history .hlabel{
+      font-weight: 650;
       font-size: 13px;
-      min-width:0;
-      overflow:hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 70%;
     }
-    .hmeta{
+    .history .hmeta{
       color: var(--muted);
       font-size: 12px;
       font-variant-numeric: tabular-nums;
-      white-space: nowrap;
+      white-space:nowrap;
     }
 
-    .foot{
-      width: min(1100px, 100%);
-      margin: 0 auto 18px;
-      padding: 0 14px;
-      color: var(--muted);
+    .err{
+      margin-top: 10px;
+      padding: 10px 10px;
+      border-radius: 14px;
+      background: rgba(255,91,106,.10);
+      border:1px solid rgba(255,91,106,.30);
+      color: #ffd7db;
       font-size: 12px;
-      display:flex;
-      gap: 8px;
-      align-items:center;
-      flex-wrap: wrap;
-    }
-    code{
-      padding: 3px 8px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.06);
-      color: rgba(255,255,255,0.85);
-      overflow-wrap:anywhere;
+      display:none;
+      white-space:pre-wrap;
+      word-break:break-word;
     }
 
-    .hidden{ display:none; }
-
-    @media (min-width: 900px){
-      .grid{ grid-template-columns: 1fr 1fr; }
-      video{ aspect-ratio: 16 / 9; }
-      .sub{ max-width: 520px; }
+    .footerHint{
+      margin-top: 10px;
+      color: rgba(255,255,255,.55);
+      font-size: 11.5px;
+      line-height: 1.4;
     }
   </style>
 </head>
 
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo" aria-hidden="true">🍎</div>
-      <div class="brand-text">
+  <div class="wrap">
+
+    <header>
+      <div class="title">
         <h1>Food Classifier</h1>
-        <p class="sub">1 frame/sec • 1 verdict/min • most frequent label wins</p>
+        <p>1 frame/sec → 1 verdict/min (most frequent label wins)</p>
       </div>
-    </div>
+      <div class="pill" id="statusPill">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">Ready</span>
+      </div>
+    </header>
 
-    <div class="actions">
-      <button id="startBtn" class="btn primary">Start</button>
-      <button id="stopBtn" class="btn" disabled>Stop</button>
-      <button id="switchBtn" class="btn" title="Switch camera">Switch</button>
-    </div>
-  </header>
+    <div class="grid">
 
-  <main class="wrap">
-    <section class="card camera-card">
-      <div class="card-head">
-        <h2>Camera</h2>
-        <div class="status">
-          <span class="dot" id="statusDot" aria-hidden="true"></span>
-          <span id="statusText">Idle</span>
+      <!-- LEFT: CAMERA -->
+      <section class="card">
+        <div class="head">
+          <h2>Camera</h2>
+          <div class="badge"><strong id="countdown">01:00</strong>&nbsp;<span class="muted">to verdict</span></div>
         </div>
-      </div>
+        <div class="body">
+          <div class="videoShell" id="videoShell">
+            <!-- iPhone SAFARI: playsinline + muted helps -->
+            <video
+              id="preview"
+              autoplay
+              muted
+              playsinline
+              webkit-playsinline
+            ></video>
+            <div class="overlay"></div>
+            <div class="scanBox"></div>
+            <div class="scanLine"></div>
+          </div>
 
-      <div class="camera">
-        <video id="video" playsinline muted></video>
-        <div class="overlay">
-          <div class="pill">
-            <span class="pill-label">Next verdict in</span>
-            <span id="countdown" class="pill-value">60s</span>
+          <div class="row">
+            <div class="controls">
+              <button class="primary" id="btnStart">Start</button>
+              <button class="danger" id="btnStop" disabled>Stop</button>
+
+              <div class="seg" role="group" aria-label="Camera facing mode">
+                <button id="btnBack" type="button">Back</button>
+                <button id="btnFront" type="button" class="active">Front</button>
+              </div>
+            </div>
+
+            <div class="pill">
+              <span class="muted">Frames/min:</span>
+              <strong id="framesThisMinute">0</strong>
+            </div>
+          </div>
+
+          <div class="err" id="errBox"></div>
+
+          <div class="footerHint">
+            iPhone tip: If it asks, allow camera. If you opened inside an in-app browser, try Safari.
           </div>
         </div>
-      </div>
-
-      <div class="hint" id="hint">
-        Tip: Allow camera permission. Use “Switch” for front/back camera.
-      </div>
-
-      <canvas id="canvas" class="hidden" width="640" height="640"></canvas>
-    </section>
-
-    <section class="grid">
-      <section class="card">
-        <div class="card-head">
-          <h2>Live (latest frame)</h2>
-          <span class="badge" id="liveBadge">—</span>
-        </div>
-
-        <div class="big">
-          <div class="big-label" id="liveLabel">Waiting…</div>
-          <div class="big-sub" id="liveConf">Confidence: —</div>
-        </div>
-
-        <div class="sep"></div>
-
-        <h3 class="small-title">Top-K (this frame)</h3>
-        <ol id="topKList" class="list"></ol>
-
-        <div class="error" id="errorBox" hidden></div>
       </section>
 
+      <!-- RIGHT: RESULTS -->
       <section class="card">
-        <div class="card-head">
-          <h2>Minute verdict</h2>
-          <span class="badge ok" id="minuteBadge">—</span>
+        <div class="head">
+          <h2>Results</h2>
+          <div class="badge" id="minuteBadge"><strong>Running</strong></div>
         </div>
+        <div class="body">
 
-        <div class="big">
-          <div class="big-label" id="minuteLabel">—</div>
-          <div class="big-sub" id="minuteMeta">Collecting frames…</div>
+          <div class="verdict">
+            <div class="verdictTop">
+              <div class="live">
+                <p class="small">Minute verdict</p>
+                <p class="big" id="minuteLabel">—</p>
+              </div>
+              <div class="live" style="text-align:right">
+                <p class="small">Minute meta</p>
+                <p class="small" id="minuteMeta">Waiting…</p>
+              </div>
+            </div>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <div class="verdict">
+            <div class="verdictTop">
+              <div class="live">
+                <p class="small">Live (last frame)</p>
+                <p class="big" id="liveLabel">—</p>
+              </div>
+              <div class="live" style="text-align:right">
+                <p class="small">Confidence</p>
+                <p class="big" id="liveConf">—</p>
+              </div>
+            </div>
+
+            <ul class="klist" id="topList"></ul>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <p class="small" style="margin:0 0 6px;">Recent minute verdicts</p>
+          <ul class="history" id="historyList"></ul>
+
         </div>
-
-        <div class="sep"></div>
-
-        <h3 class="small-title">Last verdicts</h3>
-        <ul id="historyList" class="history"></ul>
       </section>
-    </section>
-  </main>
+
+    </div>
+  </div>
 
   <script>
-    // REQUIRED by you:
+    // ✅ Use your working endpoint
     window.API_BASE = "https://elgatito1-food-classifier.hf.space";
-  </script>
 
-  <script>
-    (() => {
-      const TOP_K = 3;
-      const FPS = 1;
-      const MINUTE_MS = 60_000;
+    // Settings
+    const TOP_K = 3;
+    const FPS_INTERVAL_MS = 1000;      // 1 frame/sec
+    const MINUTE_MS = 60_000;
 
-      const API_BASE = (window.API_BASE || "").replace(/\/+$/, "");
+    // DOM
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const errBox = document.getElementById("errBox");
 
-      const $ = (id) => document.getElementById(id);
+    const btnStart = document.getElementById("btnStart");
+    const btnStop = document.getElementById("btnStop");
+    const btnBack = document.getElementById("btnBack");
+    const btnFront = document.getElementById("btnFront");
 
-      const video = $("video");
-      const canvas = $("canvas");
-      const startBtn = $("startBtn");
-      const stopBtn = $("stopBtn");
-      const switchBtn = $("switchBtn");
+    const videoShell = document.getElementById("videoShell");
+    const video = document.getElementById("preview");
+    const countdownEl = document.getElementById("countdown");
 
-      const statusDot = $("statusDot");
-      const statusText = $("statusText");
-      const countdownEl = $("countdown");
+    const framesThisMinuteEl = document.getElementById("framesThisMinute");
+    const liveLabel = document.getElementById("liveLabel");
+    const liveConf = document.getElementById("liveConf");
+    const topList = document.getElementById("topList");
 
-      const liveLabel = $("liveLabel");
-      const liveConf = $("liveConf");
-      const liveBadge = $("liveBadge");
-      const topKList = $("topKList");
+    const minuteLabel = document.getElementById("minuteLabel");
+    const minuteMeta = document.getElementById("minuteMeta");
+    const minuteBadge = document.getElementById("minuteBadge");
+    const historyList = document.getElementById("historyList");
 
-      const minuteLabel = $("minuteLabel");
-      const minuteMeta = $("minuteMeta");
-      const minuteBadge = $("minuteBadge");
-      const historyList = $("historyList");
+    // State
+    let stream = null;
+    let captureTimer = null;
+    let countdownTimer = null;
+    let inFlight = false;
 
-      const errorBox = $("errorBox");
-      const hint = $("hint");
-      const apiShow = $("apiShow");
+    let facing = "user"; // "user" (front) or "environment" (back)
 
-      // Safety: prevent null errors
-      const required = [
-        video, canvas, startBtn, stopBtn, switchBtn,
-        statusDot, statusText, countdownEl,
-        liveLabel, liveConf, liveBadge, topKList,
-        minuteLabel, minuteMeta, minuteBadge, historyList,
-        errorBox, apiShow
-      ];
-      if (required.some(x => !x)) {
-        console.error("Missing required DOM elements. Check IDs in HTML.");
+    // Minute aggregation
+    let minuteStart = null;
+    let framesThisMinute = 0;
+    let frameCounts = new Map(); // label -> count
+    let confSums = new Map();    // label -> sum(conf)
+
+    // Canvas
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: false });
+
+    // ---------- helpers ----------
+    function setStatus(kind, text){
+      statusText.textContent = text;
+      statusDot.classList.remove("ok","bad");
+      if (kind === "ok") statusDot.classList.add("ok");
+      else if (kind === "bad") statusDot.classList.add("bad");
+    }
+
+    function showError(msg){
+      errBox.style.display = "block";
+      errBox.textContent = msg;
+      setStatus("bad", "Error");
+    }
+
+    function clearError(){
+      errBox.style.display = "none";
+      errBox.textContent = "";
+    }
+
+    function fmtPct(x){
+      if (typeof x !== "number" || !isFinite(x)) return "—";
+      return (x * 100).toFixed(1) + "%";
+    }
+
+    function fmtMMSS(ms){
+      const s = Math.max(0, Math.floor(ms / 1000));
+      const mm = String(Math.floor(s / 60)).padStart(2,"0");
+      const ss = String(s % 60).padStart(2,"0");
+      return `${mm}:${ss}`;
+    }
+
+    function nowTime(){
+      const d = new Date();
+      const hh = String(d.getHours()).padStart(2,"0");
+      const mm = String(d.getMinutes()).padStart(2,"0");
+      const ss = String(d.getSeconds()).padStart(2,"0");
+      return `${hh}:${mm}:${ss}`;
+    }
+
+    function setFacing(mode){
+      facing = mode;
+      btnFront.classList.toggle("active", mode === "user");
+      btnBack.classList.toggle("active", mode === "environment");
+      videoShell.classList.toggle("back", mode === "environment");
+    }
+
+    // iPhone-safe: wait until the video has actual dimensions
+    async function waitForVideoReady(timeoutMs = 6000){
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs){
+        if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0){
+          return true;
+        }
+        await new Promise(r => setTimeout(r, 80));
+      }
+      return false;
+    }
+
+    // ---------- camera ----------
+    async function startCamera(){
+      clearError();
+      setStatus("", "Requesting camera…");
+
+      // Must be called from a user gesture (button click) on iOS.
+      // Try strict constraints first, then fallback.
+      const base = {
+        audio: false,
+        video: {
+          facingMode: { ideal: facing },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+
+      try{
+        stream = await navigator.mediaDevices.getUserMedia(base);
+      }catch(e1){
+        try{
+          stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:true });
+        }catch(e2){
+          showError(
+            "Camera failed.\n\n" +
+            "Common iPhone fixes:\n" +
+            "• Use Safari (not Instagram/TikTok browser)\n" +
+            "• Settings → Safari → Camera → Allow\n" +
+            "• Refresh and try again\n\n" +
+            "Details: " + (e2?.message || e2)
+          );
+          throw e2;
+        }
+      }
+
+      video.srcObject = stream;
+
+      // Important for iOS: playsinline + muted already set in HTML
+      // Now play() inside user action context
+      try{
+        await video.play();
+      }catch(_){ /* ignore */ }
+
+      const ok = await waitForVideoReady();
+      if (!ok){
+        showError("Camera started but video not ready. Try again or switch camera.");
+        throw new Error("video not ready");
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      setStatus("ok", "Running");
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+
+      minuteStart = Date.now();
+      resetMinuteCountersOnly();
+      startLoops();
+    }
+
+    function stopCamera(){
+      stopLoops();
+
+      if (stream){
+        const tracks = stream.getTracks();
+        tracks.forEach(t => t.stop());
+      }
+      stream = null;
+      video.srcObject = null;
+
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+
+      setStatus("", "Stopped");
+    }
+
+    // ---------- loops ----------
+    function startLoops(){
+      stopLoops();
+
+      // countdown refresh (smooth)
+      countdownTimer = setInterval(updateCountdown, 250);
+
+      // capture loop (1fps)
+      captureTimer = setInterval(captureOnce, FPS_INTERVAL_MS);
+
+      updateCountdown();
+    }
+
+    function stopLoops(){
+      if (captureTimer) clearInterval(captureTimer);
+      if (countdownTimer) clearInterval(countdownTimer);
+      captureTimer = null;
+      countdownTimer = null;
+      inFlight = false;
+    }
+
+    function updateCountdown(){
+      if (!minuteStart){
+        countdownEl.textContent = "01:00";
+        return;
+      }
+      const elapsed = Date.now() - minuteStart;
+      const remaining = MINUTE_MS - elapsed;
+      countdownEl.textContent = fmtMMSS(remaining);
+
+      // finalize if time passed
+      if (elapsed >= MINUTE_MS){
+        finalizeMinuteVerdict();
+      }
+    }
+
+    // Only reset counters — do NOT clear the displayed verdict
+    function resetMinuteCountersOnly(){
+      frameCounts = new Map();
+      confSums = new Map();
+      framesThisMinute = 0;
+      framesThisMinuteEl.textContent = "0";
+      minuteMeta.textContent = "Collecting…";
+      minuteBadge.innerHTML = "<strong>Running</strong>";
+    }
+
+    function finalizeMinuteVerdict(){
+      if (!minuteStart) return;
+
+      // If no frames collected, keep old verdict visible
+      if (framesThisMinute === 0 || frameCounts.size === 0){
+        minuteMeta.textContent = "No frames captured in last minute.";
+        minuteStart = Date.now();
+        resetMinuteCountersOnly();
         return;
       }
 
-      apiShow.textContent = API_BASE || "—";
+      let bestLabel = null;
+      let bestCount = -1;
+      let bestAvg = -1;
 
-      let stream = null;
-      let captureTimer = null;
-      let minuteTimer = null;
-      let usingFront = false;
-      let inFlight = false;
-
-      // Minute aggregation
-      let minuteStart = 0;
-      let frameCounts = new Map(); // label -> count
-      let confSums = new Map();    // label -> sum(conf)
-      let framesThisMinute = 0;
-
-      function setStatus(kind, text){
-        statusText.textContent = text;
-        statusDot.classList.remove("on","err");
-        if (kind === "on") statusDot.classList.add("on");
-        if (kind === "err") statusDot.classList.add("err");
-      }
-
-      function showError(msg){
-        errorBox.hidden = false;
-        errorBox.textContent = msg;
-        setStatus("err", "Error");
-      }
-
-      function clearError(){
-        errorBox.hidden = true;
-        errorBox.textContent = "";
-      }
-
-      function fmtPct(x){
-        if (typeof x !== "number" || !isFinite(x)) return "—";
-        return (x * 100).toFixed(1) + "%";
-      }
-
-      function fmtTime(ts){
-        const d = new Date(ts);
-        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      }
-
-      function updateCountdown(){
-        if (!minuteStart){
-          countdownEl.textContent = "60s";
-          return;
+      for (const [label, count] of frameCounts.entries()){
+        const sum = confSums.get(label) || 0;
+        const avg = sum / Math.max(1, count);
+        if (count > bestCount || (count === bestCount && avg > bestAvg)){
+          bestLabel = label;
+          bestCount = count;
+          bestAvg = avg;
         }
-        const elapsed = Date.now() - minuteStart;
-        const left = Math.max(0, MINUTE_MS - elapsed);
-        countdownEl.textContent = Math.ceil(left / 1000) + "s";
       }
 
-      function resetMinute(){
-        frameCounts = new Map();
-        confSums = new Map();
-        framesThisMinute = 0;
-        minuteStart = Date.now();
-        updateCountdown();
+      // Update minute verdict and KEEP it visible
+      minuteLabel.textContent = bestLabel;
+      minuteMeta.textContent = `${bestCount}/${framesThisMinute} frames • avg ${fmtPct(bestAvg)} • ${nowTime()}`;
+      minuteBadge.innerHTML = "<strong>VERDICT</strong>";
 
-        minuteLabel.textContent = "—";
-        minuteMeta.textContent = "Collecting frames…";
-        minuteBadge.textContent = "Running";
+      // Add to history
+      const li = document.createElement("li");
+      const left = document.createElement("div");
+      const right = document.createElement("div");
+      left.className = "hlabel";
+      right.className = "hmeta";
+      left.textContent = bestLabel;
+      right.textContent = `${bestCount}/${framesThisMinute} • ${nowTime()}`;
+      li.appendChild(left);
+      li.appendChild(right);
+      historyList.insertBefore(li, historyList.firstChild);
+
+      while (historyList.children.length > 6){
+        historyList.removeChild(historyList.lastChild);
       }
 
-      function drawToCanvas(){
-        const vw = video.videoWidth || 0;
-        const vh = video.videoHeight || 0;
-        if (!vw || !vh) return false;
+      // Start next minute window
+      minuteStart = Date.now();
+      resetMinuteCountersOnly();
+    }
 
-        const size = Math.min(vw, vh);
-        const sx = Math.floor((vw - size) / 2);
-        const sy = Math.floor((vh - size) / 2);
-
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        canvas.width = 640;
-        canvas.height = 640;
-
-        ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height);
-        return true;
-      }
-
-      function canvasToBlob(){
-        return new Promise((resolve) => {
-          canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9);
+    // ---------- API ----------
+    async function sendFrameToApi(blob){
+      // Strategy A: /predict multipart (common)
+      const urlA = `${window.API_BASE}/predict?top_k=${TOP_K}`;
+      try{
+        const fd = new FormData();
+        fd.append("file", blob, "frame.jpg");
+        const res = await fetch(urlA, { method:"POST", body: fd });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      }catch(_){
+        // Strategy B: /predict_base64 JSON (fallback)
+        const b64 = await blobToBase64(blob);
+        const urlB = `${window.API_BASE}/predict_base64?top_k=${TOP_K}`;
+        const res = await fetch(urlB, {
+          method: "POST",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify({ image_base64: b64 })
         });
-      }
-
-      function renderLive(data){
-        const label = data?.predicted_label ?? "—";
-        const conf = data?.confidence;
-
-        liveLabel.textContent = label;
-        liveConf.textContent = "Confidence: " + fmtPct(conf);
-        liveBadge.textContent = "top_k=" + TOP_K;
-
-        topKList.innerHTML = "";
-        const arr = Array.isArray(data?.top_k) ? data.top_k : [];
-        for (const item of arr){
-          const li = document.createElement("li");
-          const row = document.createElement("div");
-          row.className = "krow";
-
-          const left = document.createElement("div");
-          left.className = "kleft";
-
-          const name = document.createElement("div");
-          name.className = "kname";
-          name.textContent = item?.label ?? item?.class ?? "—";
-
-          const right = document.createElement("div");
-          right.className = "kprob";
-          right.textContent = fmtPct(item?.prob);
-
-          left.appendChild(name);
-          row.appendChild(left);
-          row.appendChild(right);
-          li.appendChild(row);
-          topKList.appendChild(li);
+        if (!res.ok){
+          const text = await res.text().catch(()=> "");
+          throw new Error(`API failed: ${res.status}\n${text.slice(0,300)}`);
         }
+        return await res.json();
       }
+    }
 
-      function aggregateForMinute(data){
-        if (!minuteStart) resetMinute();
+    function blobToBase64(blob){
+      return new Promise((resolve,reject)=>{
+        const r = new FileReader();
+        r.onload = () => {
+          const dataUrl = String(r.result || "");
+          resolve(dataUrl.split(",")[1] || "");
+        };
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+    }
 
+    // ---------- capture ----------
+    async function captureOnce(){
+      if (!stream) return;
+      if (inFlight) return;
+
+      // iOS: sometimes readyState drops; skip safely
+      if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return;
+
+      inFlight = true;
+
+      try{
+        // Keep canvas in sync (just in case iOS changes sizes)
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight){
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const blob = await new Promise((resolve)=>{
+          // iOS supports toBlob, but keep safe
+          if (canvas.toBlob){
+            canvas.toBlob((b)=> resolve(b), "image/jpeg", 0.80);
+          }else{
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.80);
+            fetch(dataUrl).then(r => r.blob()).then(resolve);
+          }
+        });
+
+        if (!blob) throw new Error("Failed to encode frame.");
+
+        const data = await sendFrameToApi(blob);
+        renderResult(data);
+
+        // Aggregate per-minute
         const label = data?.predicted_label;
-        const conf = (typeof data?.confidence === "number") ? data.confidence : 0;
-        if (!label) return;
+        const conf = Number(data?.confidence);
 
-        framesThisMinute += 1;
-        frameCounts.set(label, (frameCounts.get(label) || 0) + 1);
-        confSums.set(label, (confSums.get(label) || 0) + conf);
+        if (label){
+          framesThisMinute += 1;
+          framesThisMinuteEl.textContent = String(framesThisMinute);
 
-        minuteMeta.textContent = "Frames this minute: " + framesThisMinute;
-      }
-
-      function finalizeMinuteVerdict(){
-        if (!minuteStart) return;
-
-        if (framesThisMinute === 0 || frameCounts.size === 0){
-          minuteLabel.textContent = "No frames captured";
-          minuteMeta.textContent = "Try better lighting / keep object centered.";
-          minuteBadge.textContent = "—";
-          resetMinute();
-          return;
-        }
-
-        let bestLabel = null;
-        let bestCount = -1;
-        let bestAvg = -1;
-
-        for (const [label, count] of frameCounts.entries()){
-          const sum = confSums.get(label) || 0;
-          const avg = sum / Math.max(1, count);
-
-          if (count > bestCount || (count === bestCount && avg > bestAvg)){
-            bestLabel = label;
-            bestCount = count;
-            bestAvg = avg;
+          frameCounts.set(label, (frameCounts.get(label) || 0) + 1);
+          if (isFinite(conf)){
+            confSums.set(label, (confSums.get(label) || 0) + conf);
           }
         }
 
-        const now = Date.now();
-        minuteLabel.textContent = bestLabel;
-        minuteMeta.textContent =
-          `${bestCount}/${framesThisMinute} frames • avg conf ${fmtPct(bestAvg)} • ${fmtTime(now)}`;
-        minuteBadge.textContent = "VERDICT";
+        // if minute passed, finalize
+        if (minuteStart && (Date.now() - minuteStart) >= MINUTE_MS){
+          finalizeMinuteVerdict();
+        }
+
+      }catch(e){
+        showError("Capture/API error:\n" + (e?.message || e));
+        // keep running, but avoid spamming the user
+      }finally{
+        inFlight = false;
+      }
+    }
+
+    function renderResult(data){
+      const label = data?.predicted_label ?? "—";
+      const conf = Number(data?.confidence);
+
+      liveLabel.textContent = label;
+      liveConf.textContent = isFinite(conf) ? fmtPct(conf) : "—";
+
+      // top_k list
+      topList.innerHTML = "";
+      const items = Array.isArray(data?.top_k) ? data.top_k : [];
+
+      for (let i=0; i<items.length; i++){
+        const it = items[i] || {};
+        const lbl = it.label ?? it.class ?? "—";
+        const prob = Number(it.prob);
 
         const li = document.createElement("li");
+        li.className = "kitem";
+
         const left = document.createElement("div");
+        left.className = "lbl";
+        left.textContent = `${i+1}. ${lbl}`;
+
         const right = document.createElement("div");
-        left.className = "hlabel";
-        right.className = "hmeta";
-        left.textContent = bestLabel;
-        right.textContent = `${bestCount}/${framesThisMinute} • ${fmtTime(now)}`;
+        right.className = "prob";
+        right.textContent = isFinite(prob) ? fmtPct(prob) : "—";
+
         li.appendChild(left);
         li.appendChild(right);
-        historyList.insertBefore(li, historyList.firstChild);
-
-        while (historyList.children.length > 6){
-          historyList.removeChild(historyList.lastChild);
-        }
-
-        resetMinute();
+        topList.appendChild(li);
       }
+    }
 
-      async function sendFrame(){
-        if (inFlight || !stream) return;
-
-        const ok = drawToCanvas();
-        if (!ok) return;
-
-        inFlight = true;
-        try{
-          const blob = await canvasToBlob();
-          if (!blob) throw new Error("Could not encode frame.");
-
-          const form = new FormData();
-          form.append("file", blob, "frame.jpg");
-
-          const url = `${API_BASE}/predict?top_k=${TOP_K}`;
-
-          const res = await fetch(url, { method:"POST", body:form, mode:"cors" });
-          if (!res.ok){
-            const txt = await res.text().catch(()=>"");
-            throw new Error(`API ${res.status}: ${txt.slice(0,150)}`);
-          }
-
-          const data = await res.json();
-          clearError();
-          renderLive(data);
-          aggregateForMinute(data);
-        } catch(e){
-          console.error(e);
-          showError(String(e.message || e));
-        } finally{
-          inFlight = false;
-        }
+    // ---------- events ----------
+    btnFront.addEventListener("click", async ()=>{
+      setFacing("user");
+      if (stream){
+        stopCamera();
+        // iPhone: must restart with a tap; this click counts as a gesture
+        try{ await startCamera(); }catch(_){}
       }
+    });
 
-      function startLoops(){
-        resetMinute();
-
-        // 1 fps
-        captureTimer = setInterval(sendFrame, Math.floor(1000 / FPS));
-
-        // countdown + finalize minute
-        minuteTimer = setInterval(() => {
-          updateCountdown();
-          if (!minuteStart) return;
-          if ((Date.now() - minuteStart) >= MINUTE_MS){
-            finalizeMinuteVerdict();
-          }
-        }, 250);
+    btnBack.addEventListener("click", async ()=>{
+      setFacing("environment");
+      if (stream){
+        stopCamera();
+        try{ await startCamera(); }catch(_){}
       }
+    });
 
-      function stopLoops(){
-        if (captureTimer) { clearInterval(captureTimer); captureTimer = null; }
-        if (minuteTimer) { clearInterval(minuteTimer); minuteTimer = null; }
-        inFlight = false;
-        minuteStart = 0;
-        updateCountdown();
-      }
-
-      async function startCamera(){
+    btnStart.addEventListener("click", async ()=>{
+      // iPhone requires this to be directly triggered by the tap.
+      try{
         clearError();
-
-        if (!API_BASE){
-          showError('API_BASE is empty. It must be: https://elgatito1-food-classifier.hf.space');
-          return;
-        }
-
-        stopCamera(); // stop previous if any
-
-        try{
-          setStatus("", "Requesting camera…");
-
-          const constraints = {
-            audio:false,
-            video:{
-              facingMode: usingFront ? "user" : { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
-            }
-          };
-
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
-          video.srcObject = stream;
-          await video.play();
-
-          if (hint) hint.textContent = "Running… 1 frame per second.";
-
-          setStatus("on", "Live");
-          startBtn.disabled = true;
-          stopBtn.disabled = false;
-
-          startLoops();
-        } catch(e){
-          console.error(e);
-          showError("Camera permission denied or not available. Try Switch or a different browser.");
-        }
-      }
-
-      function stopCamera(){
-        stopLoops();
-
-        if (video){
-          video.pause?.();
-          video.srcObject = null;
-        }
-
-        if (stream){
-          for (const t of stream.getTracks()) t.stop();
-          stream = null;
-        }
-
-        setStatus("", "Idle");
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-      }
-
-      async function switchCamera(){
-        usingFront = !usingFront;
-        if (stopBtn.disabled) return; // not running
         await startCamera();
-      }
+      }catch(_){}
+    });
 
-      // Bind buttons
-      startBtn.addEventListener("click", startCamera);
-      stopBtn.addEventListener("click", stopCamera);
-      switchBtn.addEventListener("click", switchCamera);
+    btnStop.addEventListener("click", ()=>{
+      stopCamera();
+    });
 
-      // Init UI
-      setStatus("", "Idle");
-      updateCountdown();
-      liveBadge.textContent = "top_k=" + TOP_K;
-      minuteBadge.textContent = "—";
-    })();
+    // Init UI
+    setFacing("user");
+    setStatus("", "Ready");
+    minuteMeta.textContent = "Waiting…";
+    updateCountdown();
   </script>
 </body>
 </html>
