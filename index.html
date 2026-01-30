@@ -1,120 +1,111 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Food Classifier</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f19" />
+  <title>Food Freshness Classifier</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-  <link rel="stylesheet" href="style.css" />
-  <meta name="theme-color" content="#0b1220" />
+  <!-- IMPORTANT: absolute path + cache buster -->
+  <link rel="stylesheet" href="/style.css?v=3" />
 </head>
 
 <body>
-  <div class="app">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🍏</div>
-        <div class="brand-text">
-          <div class="title">Food Classifier</div>
-          <div class="subtitle">
-            <span class="dot" id="statusDot" aria-hidden="true"></span>
-            <span id="statusText">Idle</span>
-            <span class="sep">•</span>
-            <span class="badge" id="fpsBadge">1 FPS</span>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">🍎</div>
+      <div class="brand-text">
+        <h1>Food Classifier</h1>
+        <p class="sub">1 frame/sec • 1 verdict/min</p>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="startBtn" class="btn primary">Start</button>
+      <button id="stopBtn" class="btn" disabled>Stop</button>
+      <button id="switchBtn" class="btn" title="Switch camera">Switch</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card camera-card">
+      <div class="card-head">
+        <h2>Camera</h2>
+        <div class="status">
+          <span class="dot" id="statusDot" aria-hidden="true"></span>
+          <span id="statusText">Idle</span>
+        </div>
+      </div>
+
+      <div class="camera">
+        <video id="video" playsinline muted></video>
+
+        <div class="overlay">
+          <div class="pill">
+            <span class="pill-label">Next verdict in</span>
+            <span id="countdown" class="pill-value">60s</span>
           </div>
         </div>
       </div>
 
-      <div class="top-actions">
-        <button class="btn ghost" id="switchBtn" type="button" title="Switch camera">
-          🔁 <span class="btn-text">Camera</span>
-        </button>
+      <div class="hint" id="hint">
+        Tip: On phones, allow camera permission. Use “Switch” for front/back camera.
       </div>
-    </header>
 
-    <main class="grid">
-      <!-- Camera card -->
-      <section class="card camera-card">
+      <!-- hidden canvas for capturing frames -->
+      <canvas id="canvas" class="hidden" width="640" height="640"></canvas>
+    </section>
+
+    <section class="grid">
+      <section class="card">
         <div class="card-head">
-          <div class="card-title">Camera</div>
-          <div class="card-hint">We send 1 frame/sec to your API.</div>
+          <h2>Live (latest frame)</h2>
+          <span class="badge" id="liveBadge">—</span>
         </div>
 
-        <div class="camera-wrap">
-          <video id="video" autoplay playsinline muted></video>
-          <div class="camera-overlay">
-            <div class="overlay-pill" id="overlayText">Tap Start</div>
-          </div>
+        <div class="big">
+          <div class="big-label" id="liveLabel">Waiting…</div>
+          <div class="big-sub" id="liveConf">Confidence: —</div>
         </div>
 
-        <canvas id="canvas" class="hidden"></canvas>
+        <div class="sep"></div>
 
-        <div class="controls">
-          <button class="btn primary" id="startBtn" type="button">▶ Start</button>
-          <button class="btn danger" id="stopBtn" type="button" disabled>⏸ Stop</button>
-        </div>
+        <h3 class="small-title">Top-K (this frame)</h3>
+        <ol id="topKList" class="list"></ol>
 
-        <div class="error-box hidden" id="errorBox" role="alert"></div>
+        <div class="error" id="errorBox" hidden></div>
       </section>
 
-      <!-- Results -->
-      <section class="card results-card">
+      <section class="card">
         <div class="card-head">
-          <div class="card-title">Live Result</div>
-          <div class="card-hint">Updates every frame.</div>
+          <h2>Minute verdict</h2>
+          <span class="badge ok" id="minuteBadge">—</span>
         </div>
 
-        <div class="live-result">
-          <div class="big" id="currentLabel">—</div>
-          <div class="small">
-            Confidence: <span id="currentConf">—</span>
-          </div>
+        <div class="big">
+          <div class="big-label" id="minuteLabel">—</div>
+          <div class="big-sub" id="minuteMeta">Collecting frames…</div>
         </div>
 
-        <div class="divider"></div>
+        <div class="sep"></div>
 
-        <div class="card-head">
-          <div class="card-title">Top-K</div>
-          <div class="card-hint">Top 3 predictions.</div>
-        </div>
-
-        <ul class="topk" id="topKList">
-          <li class="muted">Waiting…</li>
-        </ul>
+        <h3 class="small-title">Last verdicts</h3>
+        <ul id="historyList" class="history"></ul>
       </section>
+    </section>
+  </main>
 
-      <!-- Minute verdict -->
-      <section class="card verdict-card">
-        <div class="card-head">
-          <div class="card-title">Minute Verdict</div>
-          <div class="card-hint">Most frequent label over the last 60 seconds.</div>
-        </div>
+  <footer class="foot">
+    <span class="muted">API:</span>
+    <code id="apiShow">—</code>
+  </footer>
 
-        <div class="verdict">
-          <div class="verdict-label" id="minuteVerdictValue">-</div>
-          <div class="verdict-meta" id="minuteVerdictMeta">Start monitoring to begin.</div>
-        </div>
+  <script>
+    // REQUIRED by you:
+    window.API_BASE = "https://elgatito1-food-classifier.hf.space";
+  </script>
 
-        <div class="divider"></div>
-
-        <div class="mini">
-          <div class="mini-title">How it works</div>
-          <div class="mini-text">
-            We collect frame predictions for 60 seconds. The label that appears the most wins.
-            Then it resets for the next minute.
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer class="footer">
-      <span>API:</span> <code id="apiBaseText">—</code>
-    </footer>
-  </div>
-
-  <script src="app.js" defer></script>
+  <!-- IMPORTANT: absolute path + cache buster -->
+  <script src="/app.js?v=3" defer></script>
 </body>
 </html>
