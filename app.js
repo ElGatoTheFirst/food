@@ -1,447 +1,395 @@
-/* ========= REQUIRED BY YOU ========= */
-window.API_BASE = "https://elgatito1-food-classifier.hf.space";
-/* =================================== */
-
 (() => {
-  "use strict";
-
-  // -------- Settings --------
+  // ---------- Config ----------
   const TOP_K = 3;
-  const FPS = 1;
-  const CAPTURE_INTERVAL_MS = Math.floor(1000 / FPS);
-  const VOTE_WINDOW_MS = 60_000;
-  const API_TIMEOUT_MS = 12_000;
+  const FPS = 1;                 // 1 frame per second
+  const MINUTE_MS = 60_000;      // 1 verdict per minute
 
-  // -------- DOM (safe) --------
-  function mustGet(id) {
-    const el = document.getElementById(id);
-    if (!el) throw new Error(`Missing element #${id} in index.html`);
-    return el;
+  // REQUIRED by you (set in index.html). Fallback just in case:
+  const API_BASE = (window.API_BASE || "").replace(/\/+$/, "");
+  // Show API in footer
+  const apiShow = document.getElementById("apiShow");
+  if (apiShow) apiShow.textContent = API_BASE || "—";
+
+  // ---------- DOM helpers ----------
+  const $ = (id) => document.getElementById(id);
+
+  const video = $("video");
+  const canvas = $("canvas");
+  const startBtn = $("startBtn");
+  const stopBtn = $("stopBtn");
+  const switchBtn = $("switchBtn");
+
+  const statusDot = $("statusDot");
+  const statusText = $("statusText");
+  const countdownEl = $("countdown");
+
+  const liveLabel = $("liveLabel");
+  const liveConf = $("liveConf");
+  const liveBadge = $("liveBadge");
+  const topKList = $("topKList");
+
+  const minuteLabel = $("minuteLabel");
+  const minuteMeta = $("minuteMeta");
+  const minuteBadge = $("minuteBadge");
+  const historyList = $("historyList");
+
+  const errorBox = $("errorBox");
+  const hint = $("hint");
+
+  // Prevent “Cannot set properties of null …” forever:
+  const required = [
+    video, canvas, startBtn, stopBtn, switchBtn,
+    statusDot, statusText, countdownEl,
+    liveLabel, liveConf, liveBadge, topKList,
+    minuteLabel, minuteMeta, minuteBadge, historyList,
+    errorBox
+  ];
+  if (required.some((x) => !x)) {
+    console.error("Missing required DOM elements. Check your index.html IDs.");
+    return;
   }
 
-  const els = {
-    statusDot: null,
-    statusText: null,
-    fpsBadge: null,
-    overlayText: null,
-    startBtn: null,
-    stopBtn: null,
-    switchBtn: null,
-    video: null,
-    canvas: null,
-    errorBox: null,
-
-    currentLabel: null,
-    currentConf: null,
-    topKList: null,
-
-    minuteVerdictValue: null,
-    minuteVerdictMeta: null,
-
-    apiBaseText: null,
-  };
-
-  // -------- State --------
+  // ---------- State ----------
   let stream = null;
-  let facingMode = "environment"; // default back camera on phones
-  let running = false;
-  let loopTimer = null;
+  let captureTimer = null;
+  let minuteTimer = null;
+
+  let usingFront = false;
   let inFlight = false;
 
-  // Minute voting state
-  let voteStartMs = null;
-  let voteCounts = Object.create(null);
-  let voteConfSum = Object.create(null);
-  let voteTotal = 0;
+  // minute aggregation
+  let minuteStart = 0;
+  let frameCounts = new Map();     // label -> count
+  let confSums = new Map();        // label -> sum(conf)
+  let framesThisMinute = 0;
 
-  // -------- Helpers --------
+  // ---------- UI ----------
   function setStatus(kind, text) {
-    els.statusText.textContent = text;
+    statusText.textContent = text;
 
-    els.statusDot.classList.remove("good", "bad", "warn");
-    if (kind === "good") els.statusDot.classList.add("good");
-    if (kind === "bad") els.statusDot.classList.add("bad");
-    if (kind === "warn") els.statusDot.classList.add("warn");
+    statusDot.classList.remove("on", "err");
+    if (kind === "on") statusDot.classList.add("on");
+    if (kind === "err") statusDot.classList.add("err");
   }
 
   function showError(msg) {
-    els.errorBox.textContent = msg;
-    els.errorBox.classList.remove("hidden");
+    errorBox.hidden = false;
+    errorBox.textContent = msg;
+    setStatus("err", "Error");
   }
 
   function clearError() {
-    els.errorBox.textContent = "";
-    els.errorBox.classList.add("hidden");
+    errorBox.hidden = true;
+    errorBox.textContent = "";
   }
 
-  function formatPct(x) {
-    if (typeof x !== "number" || Number.isNaN(x)) return "—";
+  function fmtPct(x) {
+    if (typeof x !== "number" || !isFinite(x)) return "—";
     return `${(x * 100).toFixed(1)}%`;
   }
 
-  function clampCanvasSize(srcW, srcH, maxSide = 420) {
-    const maxSrc = Math.max(srcW, srcH);
-    if (maxSrc <= maxSide) return { w: srcW, h: srcH };
-
-    const scale = maxSide / maxSrc;
-    return {
-      w: Math.round(srcW * scale),
-      h: Math.round(srcH * scale),
-    };
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
-  // -------- Minute Voting --------
-  function resetVoteWindow(now = Date.now()) {
-    voteStartMs = now;
-    voteCounts = Object.create(null);
-    voteConfSum = Object.create(null);
-    voteTotal = 0;
-
-    els.minuteVerdictValue.textContent = "-";
-    els.minuteVerdictMeta.textContent = "Collecting… 0 frames (60s left)";
+  function updateCountdown() {
+    if (!minuteStart) {
+      countdownEl.textContent = "60s";
+      return;
+    }
+    const elapsed = Date.now() - minuteStart;
+    const left = Math.max(0, MINUTE_MS - elapsed);
+    const sec = Math.ceil(left / 1000);
+    countdownEl.textContent = `${sec}s`;
   }
 
-  function updateVoteProgress() {
-    if (voteStartMs === null) return;
-    const elapsed = Date.now() - voteStartMs;
-    const leftSec = Math.max(0, Math.ceil((VOTE_WINDOW_MS - elapsed) / 1000));
-    els.minuteVerdictMeta.textContent = `Collecting… ${voteTotal} frames (${leftSec}s left)`;
-  }
+  // ---------- Camera ----------
+  async function startCamera() {
+    clearError();
 
-  function recordVote(label, confidence) {
-    if (!label) return;
-
-    if (voteStartMs === null) resetVoteWindow(Date.now());
-
-    voteCounts[label] = (voteCounts[label] || 0) + 1;
-    voteConfSum[label] = (voteConfSum[label] || 0) + (Number(confidence) || 0);
-    voteTotal++;
-
-    updateVoteProgress();
-  }
-
-  function finalizeVoteWindow() {
-    if (voteStartMs === null) return;
-
-    if (voteTotal === 0) {
-      els.minuteVerdictValue.textContent = "-";
-      els.minuteVerdictMeta.textContent = "No successful frames in the last minute.";
-      resetVoteWindow(Date.now());
+    if (!API_BASE) {
+      showError('API_BASE is empty. Make sure index.html sets window.API_BASE = "https://elgatito1-food-classifier.hf.space";');
       return;
     }
 
-    let bestLabel = null;
-    let bestCount = -1;
+    // Stop existing stream first
+    stopCamera();
 
-    for (const [label, count] of Object.entries(voteCounts)) {
-      if (count > bestCount) {
-        bestCount = count;
-        bestLabel = label;
-      }
+    try {
+      setStatus("", "Requesting camera…");
+
+      const constraints = {
+        audio: false,
+        video: {
+          facingMode: usingFront ? "user" : { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = stream;
+
+      await video.play();
+
+      if (hint) hint.textContent = "Running… 1 frame per second.";
+
+      setStatus("on", "Live");
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+
+      startLoops();
+    } catch (e) {
+      console.error(e);
+      showError("Camera permission denied or not available. Try another browser, or switch camera.");
     }
-
-    const pct = Math.round((bestCount / voteTotal) * 100);
-    const avgConf = (voteConfSum[bestLabel] || 0) / bestCount;
-
-    els.minuteVerdictValue.textContent = bestLabel;
-    els.minuteVerdictMeta.textContent =
-      `${bestCount}/${voteTotal} frames • ${pct}% • avg conf ${(avgConf || 0).toFixed(3)}`;
-
-    // start next minute window immediately
-    resetVoteWindow(Date.now());
   }
 
-  // Safety timer: finalize even if frames are missed
-  setInterval(() => {
-    if (voteStartMs === null) return;
-    const elapsed = Date.now() - voteStartMs;
-    if (elapsed >= VOTE_WINDOW_MS) finalizeVoteWindow();
-  }, 500);
+  function stopCamera() {
+    if (captureTimer) { clearInterval(captureTimer); captureTimer = null; }
+    if (minuteTimer) { clearInterval(minuteTimer); minuteTimer = null; }
 
-  // -------- Camera --------
-  async function stopCamera() {
+    if (video) {
+      video.pause?.();
+      video.srcObject = null;
+    }
+
     if (stream) {
       for (const t of stream.getTracks()) t.stop();
       stream = null;
     }
-    els.video.srcObject = null;
-  }
 
-  async function startCamera() {
-    await stopCamera();
+    inFlight = false;
 
-    const constraints = {
-      audio: false,
-      video: {
-        facingMode: { ideal: facingMode },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-    };
+    setStatus("", "Idle");
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
 
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    els.video.srcObject = stream;
-
-    // Wait until video has dimensions
-    await new Promise((resolve) => {
-      if (els.video.readyState >= 2) return resolve();
-      els.video.onloadedmetadata = () => resolve();
-    });
+    // reset countdown display
+    minuteStart = 0;
+    updateCountdown();
   }
 
   async function switchCamera() {
-    facingMode = (facingMode === "environment") ? "user" : "environment";
-
-    if (!running) {
-      // if not running, just restart camera preview
-      try {
-        setStatus("warn", "Switching camera…");
-        await startCamera();
-        setStatus("good", "Ready");
-      } catch (e) {
-        setStatus("bad", "Camera error");
-        showError(String(e?.message || e));
-      }
-      return;
-    }
-
-    // if running, pause loop briefly, restart camera, then continue
-    try {
-      setStatus("warn", "Switching camera…");
-      await startCamera();
-      setStatus("good", "Monitoring");
-      els.overlayText.textContent = "Monitoring…";
-    } catch (e) {
-      setStatus("bad", "Camera error");
-      showError(String(e?.message || e));
-    }
+    usingFront = !usingFront;
+    if (stopBtn.disabled) return; // not running
+    await startCamera();
   }
 
-  // -------- API --------
-  async function sendFrameToApi(blob) {
-    const url = `${window.API_BASE}/predict?top_k=${TOP_K}`;
-    const fd = new FormData();
-    fd.append("file", blob, "frame.jpg");
+  // ---------- Capture & API ----------
+  function drawToCanvas() {
+    // Ensure we have video dimensions
+    const vw = video.videoWidth || 0;
+    const vh = video.videoHeight || 0;
+    if (!vw || !vh) return false;
 
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
+    const size = Math.min(vw, vh);
+    const sx = Math.floor((vw - size) / 2);
+    const sy = Math.floor((vh - size) / 2);
 
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    canvas.width = 640;
+    canvas.height = 640;
+
+    ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height);
+    return true;
+  }
+
+  function canvasToBlob() {
+    return new Promise((resolve) => {
+      canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9);
+    });
+  }
+
+  async function sendFrame() {
+    if (inFlight) return;
+    if (!stream) return;
+
+    const ok = drawToCanvas();
+    if (!ok) return;
+
+    inFlight = true;
     try {
+      const blob = await canvasToBlob();
+      if (!blob) throw new Error("Could not encode frame.");
+
+      const form = new FormData();
+      form.append("file", blob, "frame.jpg");
+
+      const url = `${API_BASE}/predict?top_k=${TOP_K}`;
+
       const res = await fetch(url, {
         method: "POST",
-        body: fd,
-        signal: ctrl.signal,
+        body: form,
+        mode: "cors"
       });
 
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(`API ${res.status}: ${text.slice(0, 140)}`);
+        const txt = await res.text().catch(() => "");
+        throw new Error(`API ${res.status}: ${txt.slice(0, 150)}`);
       }
 
-      return await res.json();
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  // -------- UI Rendering --------
-  function renderResult(data) {
-    const label = data?.predicted_label ?? "—";
-    const conf = data?.confidence;
-
-    els.currentLabel.textContent = label;
-    els.currentConf.textContent = formatPct(conf);
-
-    const topK = Array.isArray(data?.top_k) ? data.top_k : [];
-    els.topKList.innerHTML = "";
-
-    if (topK.length === 0) {
-      const li = document.createElement("li");
-      li.className = "muted";
-      li.textContent = "No top-k returned.";
-      els.topKList.appendChild(li);
-      return;
-    }
-
-    for (const item of topK.slice(0, TOP_K)) {
-      const li = document.createElement("li");
-
-      const left = document.createElement("div");
-      left.className = "k-left";
-
-      const title = document.createElement("div");
-      title.className = "k-title";
-      title.textContent = item?.label ?? item?.class ?? "Unknown";
-
-      const sub = document.createElement("div");
-      sub.className = "k-sub";
-      sub.textContent = item?.class ? `class: ${item.class}` : " ";
-
-      left.appendChild(title);
-      left.appendChild(sub);
-
-      const prob = document.createElement("div");
-      prob.className = "k-prob";
-      prob.textContent = formatPct(item?.prob);
-
-      li.appendChild(left);
-      li.appendChild(prob);
-
-      els.topKList.appendChild(li);
-    }
-  }
-
-  // -------- Capture Loop (1 FPS, no overlap) --------
-  async function captureOnce() {
-    if (!running) return;
-    if (inFlight) return;
-
-    // Ensure video has size
-    const vw = els.video.videoWidth;
-    const vh = els.video.videoHeight;
-    if (!vw || !vh) return;
-
-    inFlight = true;
-
-    try {
-      const { w, h } = clampCanvasSize(vw, vh, 420);
-      els.canvas.width = w;
-      els.canvas.height = h;
-
-      const ctx = els.canvas.getContext("2d", { alpha: false });
-      ctx.drawImage(els.video, 0, 0, w, h);
-
-      const blob = await new Promise((resolve) => {
-        els.canvas.toBlob(
-          (b) => resolve(b),
-          "image/jpeg",
-          0.85
-        );
-      });
-
-      if (!blob) throw new Error("Failed to encode frame (blob is null)");
-
-      const data = await sendFrameToApi(blob);
-
+      const data = await res.json();
       clearError();
-      setStatus("good", "Monitoring");
-      els.overlayText.textContent = "Monitoring…";
-
-      renderResult(data);
-      recordVote(data?.predicted_label, data?.confidence);
+      renderLive(data);
+      aggregateForMinute(data);
     } catch (e) {
-      // Don’t crash, just show error and keep trying next second
-      setStatus("warn", "API issue");
-      els.overlayText.textContent = "Trying…";
-      showError(String(e?.message || e));
+      console.error(e);
+      showError(String(e.message || e));
     } finally {
       inFlight = false;
     }
   }
 
-  function startLoop() {
-    // run immediately, then every 1s (but captureOnce blocks overlap)
-    captureOnce();
-    loopTimer = setInterval(captureOnce, CAPTURE_INTERVAL_MS);
-  }
+  function renderLive(data) {
+    const label = data?.predicted_label ?? "—";
+    const conf = data?.confidence;
 
-  function stopLoop() {
-    if (loopTimer) clearInterval(loopTimer);
-    loopTimer = null;
-    inFlight = false;
-  }
+    liveLabel.textContent = label;
+    liveConf.textContent = `Confidence: ${fmtPct(conf)}`;
+    liveBadge.textContent = `top_k=${TOP_K}`;
 
-  // -------- Controls --------
-  async function startMonitoring() {
-    clearError();
-    setStatus("warn", "Starting…");
-    els.overlayText.textContent = "Starting…";
+    // Top-K list
+    topKList.innerHTML = "";
+    const arr = Array.isArray(data?.top_k) ? data.top_k : [];
+    for (const item of arr) {
+      const li = document.createElement("li");
+      const left = document.createElement("div");
+      const right = document.createElement("div");
 
-    try {
-      await startCamera();
+      left.className = "kleft";
+      right.className = "kprob";
 
-      running = true;
-      els.startBtn.disabled = true;
-      els.stopBtn.disabled = false;
+      const name = document.createElement("div");
+      name.className = "kname";
+      name.textContent = item?.label ?? item?.class ?? "—";
 
-      setStatus("good", "Monitoring");
-      els.overlayText.textContent = "Monitoring…";
+      left.appendChild(name);
+      right.textContent = fmtPct(item?.prob);
 
-      resetVoteWindow(Date.now());
-      startLoop();
-    } catch (e) {
-      running = false;
-      setStatus("bad", "Camera error");
-      els.overlayText.textContent = "Tap Start";
-      showError(String(e?.message || e));
+      const row = document.createElement("div");
+      row.className = "krow";
+      row.appendChild(left);
+      row.appendChild(right);
+
+      li.appendChild(row);
+      topKList.appendChild(li);
     }
   }
 
-  async function stopMonitoring() {
-    running = false;
-    stopLoop();
+  // ---------- Minute verdict logic ----------
+  function resetMinute() {
+    frameCounts = new Map();
+    confSums = new Map();
+    framesThisMinute = 0;
+    minuteStart = Date.now();
+    updateCountdown();
 
-    els.startBtn.disabled = false;
-    els.stopBtn.disabled = true;
-
-    els.overlayText.textContent = "Tap Start";
-    setStatus("warn", "Stopped");
-
-    // don’t kill camera preview completely (feels nicer)
-    // BUT if you want to fully stop camera, uncomment:
-    // await stopCamera();
+    minuteLabel.textContent = "—";
+    minuteMeta.textContent = "Collecting frames…";
+    minuteBadge.textContent = "Running";
+    minuteBadge.classList.add("ok");
   }
 
-  // -------- Health ping --------
-  async function pingHealth() {
-    try {
-      const res = await fetch(`${window.API_BASE}/health`, { method: "GET" });
-      if (!res.ok) throw new Error(`Health ${res.status}`);
-      setStatus("good", "Ready");
-    } catch {
-      setStatus("warn", "Ready (health unknown)");
+  function aggregateForMinute(data) {
+    if (!minuteStart) resetMinute();
+
+    const label = data?.predicted_label;
+    const conf = (typeof data?.confidence === "number") ? data.confidence : 0;
+
+    if (!label) return;
+
+    framesThisMinute += 1;
+    frameCounts.set(label, (frameCounts.get(label) || 0) + 1);
+    confSums.set(label, (confSums.get(label) || 0) + conf);
+
+    // show progress
+    minuteMeta.textContent = `Frames this minute: ${framesThisMinute}`;
+  }
+
+  function finalizeMinuteVerdict() {
+    if (!minuteStart) return;
+
+    // If no frames captured
+    if (framesThisMinute === 0 || frameCounts.size === 0) {
+      minuteLabel.textContent = "No frames captured";
+      minuteMeta.textContent = "Try better lighting / keep object centered.";
+      minuteBadge.textContent = "—";
+      return;
     }
+
+    // pick label with highest count; tie-break by higher avg confidence
+    let bestLabel = null;
+    let bestCount = -1;
+    let bestAvg = -1;
+
+    for (const [label, count] of frameCounts.entries()) {
+      const sum = confSums.get(label) || 0;
+      const avg = sum / Math.max(1, count);
+
+      if (count > bestCount || (count === bestCount && avg > bestAvg)) {
+        bestLabel = label;
+        bestCount = count;
+        bestAvg = avg;
+      }
+    }
+
+    const now = Date.now();
+    minuteLabel.textContent = bestLabel;
+    minuteMeta.textContent = `${bestCount}/${framesThisMinute} frames • avg conf ${fmtPct(bestAvg)} • ${fmtTime(now)}`;
+    minuteBadge.textContent = "VERDICT";
+
+    // add to history
+    const li = document.createElement("li");
+    const left = document.createElement("div");
+    const right = document.createElement("div");
+    left.className = "hlabel";
+    right.className = "hmeta";
+
+    left.textContent = bestLabel;
+    right.textContent = `${bestCount}/${framesThisMinute} • ${fmtTime(now)}`;
+
+    li.appendChild(left);
+    li.appendChild(right);
+
+    historyList.insertBefore(li, historyList.firstChild);
+
+    // keep history short
+    while (historyList.children.length > 6) {
+      historyList.removeChild(historyList.lastChild);
+    }
+
+    // start new minute window
+    resetMinute();
   }
 
-  // -------- Init --------
-  function init() {
-    // Grab DOM elements (and guarantee they exist)
-    els.statusDot = mustGet("statusDot");
-    els.statusText = mustGet("statusText");
-    els.fpsBadge = mustGet("fpsBadge");
-    els.overlayText = mustGet("overlayText");
-    els.startBtn = mustGet("startBtn");
-    els.stopBtn = mustGet("stopBtn");
-    els.switchBtn = mustGet("switchBtn");
-    els.video = mustGet("video");
-    els.canvas = mustGet("canvas");
-    els.errorBox = mustGet("errorBox");
+  function startLoops() {
+    // Minute window starts immediately when you start monitoring
+    resetMinute();
 
-    els.currentLabel = mustGet("currentLabel");
-    els.currentConf = mustGet("currentConf");
-    els.topKList = mustGet("topKList");
+    // 1 FPS capture
+    const intervalMs = Math.floor(1000 / FPS);
+    captureTimer = setInterval(sendFrame, intervalMs);
 
-    els.minuteVerdictValue = mustGet("minuteVerdictValue");
-    els.minuteVerdictMeta = mustGet("minuteVerdictMeta");
+    // Countdown + finalize every minute (fix for “always shows -”)
+    minuteTimer = setInterval(() => {
+      updateCountdown();
+      if (!minuteStart) return;
 
-    els.apiBaseText = mustGet("apiBaseText");
-
-    els.apiBaseText.textContent = window.API_BASE;
-    els.fpsBadge.textContent = `${FPS} FPS`;
-
-    setStatus("warn", "Idle");
-    els.overlayText.textContent = "Tap Start";
-
-    els.startBtn.addEventListener("click", startMonitoring);
-    els.stopBtn.addEventListener("click", stopMonitoring);
-    els.switchBtn.addEventListener("click", switchCamera);
-
-    pingHealth();
-
-    // optional: preload camera preview without starting monitoring
-    // (comment out if you don’t want permission prompt until Start)
-    // startCamera().then(() => setStatus("good", "Ready")).catch(() => {});
+      const elapsed = Date.now() - minuteStart;
+      if (elapsed >= MINUTE_MS) {
+        finalizeMinuteVerdict();
+      }
+    }, 250);
   }
 
-  window.addEventListener("DOMContentLoaded", init);
+  // ---------- Events ----------
+  startBtn.addEventListener("click", startCamera);
+  stopBtn.addEventListener("click", stopCamera);
+  switchBtn.addEventListener("click", switchCamera);
+
+  // initial UI
+  setStatus("", "Idle");
+  updateCountdown();
 })();
