@@ -1,362 +1,447 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const $ = (id) => document.getElementById(id);
+/* ========= REQUIRED BY YOU ========= */
+window.API_BASE = "https://elgatito1-food-classifier.hf.space";
+/* =================================== */
 
-  // Tabs / panels
-  const tabCamera = $("tabCamera");
-  const tabUpload = $("tabUpload");
-  const panelCamera = $("panelCamera");
-  const panelUpload = $("panelUpload");
+(() => {
+  "use strict";
 
-  // Camera elements
-  const video = $("video");
-  const canvas = $("canvas");
-  const btnStart = $("btnStart");
-  const btnStop = $("btnStop");
-  const topKCam = $("topKCam");
-  const minuteBadge = $("minuteBadge");
+  // -------- Settings --------
+  const TOP_K = 3;
+  const FPS = 1;
+  const CAPTURE_INTERVAL_MS = Math.floor(1000 / FPS);
+  const VOTE_WINDOW_MS = 60_000;
+  const API_TIMEOUT_MS = 12_000;
 
-  // Upload elements
-  const fileInput = $("fileInput");
-  const previewImg = $("previewImg");
-  const previewEmpty = $("previewEmpty");
-  const btnPredict = $("btnPredict");
-  const topKUpload = $("topKUpload");
-
-  // Result elements
-  const statusEl = $("status");
-  const apiPill = $("apiPill");
-  const minuteLabel = $("minuteLabel");
-  const minuteSub = $("minuteSub");
-  const lastFrameLabel = $("lastFrameLabel");
-  const lastFrameConf = $("lastFrameConf");
-  const voteCount = $("voteCount");
-  const progressFill = $("progressFill");
-  const voteList = $("voteList");
-
-  // API base (required)
-  const API_BASE = (window.API_BASE || "").replace(/\/$/, "");
-  apiPill.textContent = API_BASE ? `API: ${API_BASE}` : "API: (missing)";
-  if (!API_BASE) setStatus("err", "window.API_BASE is not set.");
-
-  function setStatus(kind, msg) {
-    statusEl.className = `status ${kind || ""}`;
-    statusEl.textContent = msg;
+  // -------- DOM (safe) --------
+  function mustGet(id) {
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`Missing element #${id} in index.html`);
+    return el;
   }
 
-  function fmtPct(x) {
-    if (x == null || Number.isNaN(x)) return "—";
-    const p = Math.max(0, Math.min(1, Number(x))) * 100;
-    return `${p.toFixed(1)}%`;
+  const els = {
+    statusDot: null,
+    statusText: null,
+    fpsBadge: null,
+    overlayText: null,
+    startBtn: null,
+    stopBtn: null,
+    switchBtn: null,
+    video: null,
+    canvas: null,
+    errorBox: null,
+
+    currentLabel: null,
+    currentConf: null,
+    topKList: null,
+
+    minuteVerdictValue: null,
+    minuteVerdictMeta: null,
+
+    apiBaseText: null,
+  };
+
+  // -------- State --------
+  let stream = null;
+  let facingMode = "environment"; // default back camera on phones
+  let running = false;
+  let loopTimer = null;
+  let inFlight = false;
+
+  // Minute voting state
+  let voteStartMs = null;
+  let voteCounts = Object.create(null);
+  let voteConfSum = Object.create(null);
+  let voteTotal = 0;
+
+  // -------- Helpers --------
+  function setStatus(kind, text) {
+    els.statusText.textContent = text;
+
+    els.statusDot.classList.remove("good", "bad", "warn");
+    if (kind === "good") els.statusDot.classList.add("good");
+    if (kind === "bad") els.statusDot.classList.add("bad");
+    if (kind === "warn") els.statusDot.classList.add("warn");
   }
 
-  function switchMode(mode) {
-    const isCam = mode === "camera";
-    tabCamera.classList.toggle("isActive", isCam);
-    tabUpload.classList.toggle("isActive", !isCam);
-    panelCamera.classList.toggle("hidden", !isCam);
-    panelUpload.classList.toggle("hidden", isCam);
+  function showError(msg) {
+    els.errorBox.textContent = msg;
+    els.errorBox.classList.remove("hidden");
   }
 
-  tabCamera.addEventListener("click", () => switchMode("camera"));
-  tabUpload.addEventListener("click", () => switchMode("upload"));
+  function clearError() {
+    els.errorBox.textContent = "";
+    els.errorBox.classList.add("hidden");
+  }
 
-  // ----------- Upload prediction -----------
-  let selectedFile = null;
+  function formatPct(x) {
+    if (typeof x !== "number" || Number.isNaN(x)) return "—";
+    return `${(x * 100).toFixed(1)}%`;
+  }
 
-  fileInput.addEventListener("change", () => {
-    selectedFile = fileInput.files?.[0] || null;
-    btnPredict.disabled = !selectedFile;
+  function clampCanvasSize(srcW, srcH, maxSide = 420) {
+    const maxSrc = Math.max(srcW, srcH);
+    if (maxSrc <= maxSide) return { w: srcW, h: srcH };
 
-    if (!selectedFile) {
-      previewImg.classList.add("hidden");
-      previewEmpty.classList.remove("hidden");
+    const scale = maxSide / maxSrc;
+    return {
+      w: Math.round(srcW * scale),
+      h: Math.round(srcH * scale),
+    };
+  }
+
+  // -------- Minute Voting --------
+  function resetVoteWindow(now = Date.now()) {
+    voteStartMs = now;
+    voteCounts = Object.create(null);
+    voteConfSum = Object.create(null);
+    voteTotal = 0;
+
+    els.minuteVerdictValue.textContent = "-";
+    els.minuteVerdictMeta.textContent = "Collecting… 0 frames (60s left)";
+  }
+
+  function updateVoteProgress() {
+    if (voteStartMs === null) return;
+    const elapsed = Date.now() - voteStartMs;
+    const leftSec = Math.max(0, Math.ceil((VOTE_WINDOW_MS - elapsed) / 1000));
+    els.minuteVerdictMeta.textContent = `Collecting… ${voteTotal} frames (${leftSec}s left)`;
+  }
+
+  function recordVote(label, confidence) {
+    if (!label) return;
+
+    if (voteStartMs === null) resetVoteWindow(Date.now());
+
+    voteCounts[label] = (voteCounts[label] || 0) + 1;
+    voteConfSum[label] = (voteConfSum[label] || 0) + (Number(confidence) || 0);
+    voteTotal++;
+
+    updateVoteProgress();
+  }
+
+  function finalizeVoteWindow() {
+    if (voteStartMs === null) return;
+
+    if (voteTotal === 0) {
+      els.minuteVerdictValue.textContent = "-";
+      els.minuteVerdictMeta.textContent = "No successful frames in the last minute.";
+      resetVoteWindow(Date.now());
       return;
     }
 
-    const url = URL.createObjectURL(selectedFile);
-    previewImg.src = url;
-    previewImg.onload = () => URL.revokeObjectURL(url);
+    let bestLabel = null;
+    let bestCount = -1;
 
-    previewEmpty.classList.add("hidden");
-    previewImg.classList.remove("hidden");
-  });
-
-  btnPredict.addEventListener("click", async () => {
-    if (!selectedFile) return;
-
-    try {
-      setStatus("work", "Predicting image…");
-      const k = clampInt(topKUpload.value, 3, 1, 10);
-      const data = await predictWithBlob(selectedFile, k);
-      showLastFrame(data);
-      setStatus("ok", "Done ✅");
-    } catch (e) {
-      setStatus("err", e?.message || "Upload predict failed.");
+    for (const [label, count] of Object.entries(voteCounts)) {
+      if (count > bestCount) {
+        bestCount = count;
+        bestLabel = label;
+      }
     }
-  });
 
-  // ----------- Camera monitoring (1 fps + 1 verdict/min) -----------
-  let stream = null;
-  let tickTimer = null;
-  let secondTimer = null;
-  let inFlight = false;
-  let controller = null;
+    const pct = Math.round((bestCount / voteTotal) * 100);
+    const avgConf = (voteConfSum[bestLabel] || 0) / bestCount;
 
-  const FPS = 1;
-  const FRAMES_PER_MINUTE = 60;
+    els.minuteVerdictValue.textContent = bestLabel;
+    els.minuteVerdictMeta.textContent =
+      `${bestCount}/${voteTotal} frames • ${pct}% • avg conf ${(avgConf || 0).toFixed(3)}`;
 
-  // votes[label] = count
-  let votes = new Map();
-  // confSum[label] = sum of confidences for that label
-  let confSum = new Map();
-  let framesSeen = 0;
-  let secondsLeft = 60;
-
-  function resetMinute() {
-    votes = new Map();
-    confSum = new Map();
-    framesSeen = 0;
-    secondsLeft = 60;
-    updateMinuteUI();
-    minuteLabel.textContent = "—";
-    minuteSub.textContent = "Collecting votes…";
-    voteList.innerHTML = "";
+    // start next minute window immediately
+    resetVoteWindow(Date.now());
   }
 
-  function updateMinuteUI() {
-    minuteBadge.textContent = `00:${String(secondsLeft).padStart(2, "0")}`;
-    voteCount.textContent = `${framesSeen} / ${FRAMES_PER_MINUTE}`;
-    progressFill.style.width = `${Math.min(100, (framesSeen / FRAMES_PER_MINUTE) * 100)}%`;
-  }
+  // Safety timer: finalize even if frames are missed
+  setInterval(() => {
+    if (voteStartMs === null) return;
+    const elapsed = Date.now() - voteStartMs;
+    if (elapsed >= VOTE_WINDOW_MS) finalizeVoteWindow();
+  }, 500);
 
-  function clampInt(v, fallback, min, max) {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return fallback;
-    return Math.max(min, Math.min(max, Math.round(n)));
+  // -------- Camera --------
+  async function stopCamera() {
+    if (stream) {
+      for (const t of stream.getTracks()) t.stop();
+      stream = null;
+    }
+    els.video.srcObject = null;
   }
 
   async function startCamera() {
-    if (!API_BASE) return;
+    await stopCamera();
 
-    try {
-      setStatus("work", "Starting camera…");
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 640 },
-          height: { ideal: 480 }
-        },
-        audio: false
-      });
+    const constraints = {
+      audio: false,
+      video: {
+        facingMode: { ideal: facingMode },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    };
 
-      video.srcObject = stream;
-      await video.play();
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    els.video.srcObject = stream;
 
-      btnStart.disabled = true;
-      btnStop.disabled = false;
-
-      resetMinute();
-      setStatus("ok", "Running (1 frame/sec)…");
-
-      // Countdown timer (1 sec)
-      secondTimer = setInterval(() => {
-        secondsLeft = Math.max(0, secondsLeft - 1);
-        updateMinuteUI();
-
-        if (secondsLeft <= 0) {
-          // finalize minute
-          finalizeMinuteVerdict();
-          // restart next minute
-          resetMinute();
-        }
-      }, 1000);
-
-      // Capture loop (1 fps)
-      const intervalMs = Math.round(1000 / FPS);
-      tickTimer = setInterval(captureOnce, intervalMs);
-
-    } catch (e) {
-      setStatus("err", "Camera permission denied or unavailable.");
-      stopCamera();
-    }
+    // Wait until video has dimensions
+    await new Promise((resolve) => {
+      if (els.video.readyState >= 2) return resolve();
+      els.video.onloadedmetadata = () => resolve();
+    });
   }
 
-  function stopCamera() {
-    if (tickTimer) clearInterval(tickTimer);
-    if (secondTimer) clearInterval(secondTimer);
-    tickTimer = null;
-    secondTimer = null;
+  async function switchCamera() {
+    facingMode = (facingMode === "environment") ? "user" : "environment";
 
-    if (controller) controller.abort();
-    controller = null;
-    inFlight = false;
-
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-      stream = null;
-    }
-    if (video) video.srcObject = null;
-
-    btnStart.disabled = false;
-    btnStop.disabled = true;
-
-    setStatus("ok", "Stopped.");
-  }
-
-  btnStart.addEventListener("click", startCamera);
-  btnStop.addEventListener("click", stopCamera);
-
-  async function captureOnce() {
-    if (!stream || !API_BASE) return;
-    if (inFlight) return; // prevent piling requests if API is slow
-
-    // Make sure video is ready
-    if (video.videoWidth === 0 || video.videoHeight === 0) return;
-
-    inFlight = true;
-    controller = new AbortController();
-
-    try {
-      // Draw current frame
-      const w = 640;
-      const h = Math.round((video.videoHeight / video.videoWidth) * w);
-      canvas.width = w;
-      canvas.height = h;
-
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      ctx.drawImage(video, 0, 0, w, h);
-
-      // Convert to blob
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
-      if (!blob) throw new Error("Could not encode frame.");
-
-      const k = clampInt(topKCam.value, 3, 1, 10);
-      const data = await predictWithBlob(blob, k, controller.signal);
-
-      // Update "last frame"
-      showLastFrame(data);
-
-      // Vote
-      const label = data?.predicted_label ?? "Unknown";
-      const conf = Number(data?.confidence ?? 0);
-
-      votes.set(label, (votes.get(label) || 0) + 1);
-      confSum.set(label, (confSum.get(label) || 0) + (Number.isFinite(conf) ? conf : 0));
-      framesSeen = Math.min(FRAMES_PER_MINUTE, framesSeen + 1);
-
-      updateMinuteUI();
-      renderVoteList();
-
-      // (optional) if we already collected 60 frames before timer ends, finalize early
-      if (framesSeen >= FRAMES_PER_MINUTE) {
-        finalizeMinuteVerdict();
-        resetMinute();
+    if (!running) {
+      // if not running, just restart camera preview
+      try {
+        setStatus("warn", "Switching camera…");
+        await startCamera();
+        setStatus("good", "Ready");
+      } catch (e) {
+        setStatus("bad", "Camera error");
+        showError(String(e?.message || e));
       }
-
-    } catch (e) {
-      // Don’t spam errors every second; show a short message
-      setStatus("err", (e?.message || "Frame predict failed.").slice(0, 120));
-    } finally {
-      inFlight = false;
-      controller = null;
-    }
-  }
-
-  function showLastFrame(data) {
-    const label = data?.predicted_label ?? "—";
-    lastFrameLabel.textContent = label;
-    lastFrameConf.textContent = data?.confidence != null ? `Confidence: ${fmtPct(data.confidence)}` : "—";
-  }
-
-  function finalizeMinuteVerdict() {
-    if (votes.size === 0) {
-      minuteLabel.textContent = "—";
-      minuteSub.textContent = "No frames collected this minute.";
       return;
     }
 
-    // winner = max votes
-    let winner = null;
-    let best = -1;
-
-    for (const [label, count] of votes.entries()) {
-      if (count > best) {
-        best = count;
-        winner = label;
-      }
+    // if running, pause loop briefly, restart camera, then continue
+    try {
+      setStatus("warn", "Switching camera…");
+      await startCamera();
+      setStatus("good", "Monitoring");
+      els.overlayText.textContent = "Monitoring…";
+    } catch (e) {
+      setStatus("bad", "Camera error");
+      showError(String(e?.message || e));
     }
-
-    const avgConf = (() => {
-      const s = confSum.get(winner) || 0;
-      const c = votes.get(winner) || 1;
-      return s / c;
-    })();
-
-    minuteLabel.textContent = winner;
-    minuteSub.textContent = `Winner with ${best} / ${framesSeen} frames • Avg confidence ${fmtPct(avgConf)}`;
-
-    setStatus("ok", "Minute verdict updated ✅");
   }
 
-  function renderVoteList() {
-    // Sort by votes descending
-    const entries = Array.from(votes.entries()).sort((a, b) => b[1] - a[1]);
-    const maxVotes = entries.length ? entries[0][1] : 1;
-
-    voteList.innerHTML = "";
-    entries.slice(0, 6).forEach(([label, count]) => {
-      const li = document.createElement("li");
-      li.className = "rowItem";
-
-      const top = document.createElement("div");
-      top.className = "rowTop";
-
-      const name = document.createElement("div");
-      name.className = "rowName";
-      name.textContent = label;
-
-      const right = document.createElement("div");
-      right.className = "rowVotes";
-      right.textContent = `${count} vote${count === 1 ? "" : "s"}`;
-
-      top.appendChild(name);
-      top.appendChild(right);
-
-      const bar = document.createElement("div");
-      bar.className = "rowBar";
-
-      const fill = document.createElement("div");
-      fill.className = "rowFill";
-      fill.style.width = `${Math.round((count / maxVotes) * 100)}%`;
-
-      bar.appendChild(fill);
-
-      li.appendChild(top);
-      li.appendChild(bar);
-      voteList.appendChild(li);
-    });
-  }
-
-  async function predictWithBlob(blobOrFile, topK = 3, signal) {
-    const url = `${API_BASE}/predict?top_k=${encodeURIComponent(topK)}`;
+  // -------- API --------
+  async function sendFrameToApi(blob) {
+    const url = `${window.API_BASE}/predict?top_k=${TOP_K}`;
     const fd = new FormData();
-    fd.append("file", blobOrFile, "frame.jpg");
+    fd.append("file", blob, "frame.jpg");
 
-    const res = await fetch(url, {
-      method: "POST",
-      body: fd,
-      mode: "cors",
-      signal
-    });
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
 
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`API ${res.status}: ${txt.slice(0, 160)}`);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        body: fd,
+        signal: ctrl.signal,
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`API ${res.status}: ${text.slice(0, 140)}`);
+      }
+
+      return await res.json();
+    } finally {
+      clearTimeout(timeout);
     }
-    return await res.json();
   }
 
-  // Default mode
-  switchMode("camera");
-  setStatus("ok", "Ready.");
-});
+  // -------- UI Rendering --------
+  function renderResult(data) {
+    const label = data?.predicted_label ?? "—";
+    const conf = data?.confidence;
+
+    els.currentLabel.textContent = label;
+    els.currentConf.textContent = formatPct(conf);
+
+    const topK = Array.isArray(data?.top_k) ? data.top_k : [];
+    els.topKList.innerHTML = "";
+
+    if (topK.length === 0) {
+      const li = document.createElement("li");
+      li.className = "muted";
+      li.textContent = "No top-k returned.";
+      els.topKList.appendChild(li);
+      return;
+    }
+
+    for (const item of topK.slice(0, TOP_K)) {
+      const li = document.createElement("li");
+
+      const left = document.createElement("div");
+      left.className = "k-left";
+
+      const title = document.createElement("div");
+      title.className = "k-title";
+      title.textContent = item?.label ?? item?.class ?? "Unknown";
+
+      const sub = document.createElement("div");
+      sub.className = "k-sub";
+      sub.textContent = item?.class ? `class: ${item.class}` : " ";
+
+      left.appendChild(title);
+      left.appendChild(sub);
+
+      const prob = document.createElement("div");
+      prob.className = "k-prob";
+      prob.textContent = formatPct(item?.prob);
+
+      li.appendChild(left);
+      li.appendChild(prob);
+
+      els.topKList.appendChild(li);
+    }
+  }
+
+  // -------- Capture Loop (1 FPS, no overlap) --------
+  async function captureOnce() {
+    if (!running) return;
+    if (inFlight) return;
+
+    // Ensure video has size
+    const vw = els.video.videoWidth;
+    const vh = els.video.videoHeight;
+    if (!vw || !vh) return;
+
+    inFlight = true;
+
+    try {
+      const { w, h } = clampCanvasSize(vw, vh, 420);
+      els.canvas.width = w;
+      els.canvas.height = h;
+
+      const ctx = els.canvas.getContext("2d", { alpha: false });
+      ctx.drawImage(els.video, 0, 0, w, h);
+
+      const blob = await new Promise((resolve) => {
+        els.canvas.toBlob(
+          (b) => resolve(b),
+          "image/jpeg",
+          0.85
+        );
+      });
+
+      if (!blob) throw new Error("Failed to encode frame (blob is null)");
+
+      const data = await sendFrameToApi(blob);
+
+      clearError();
+      setStatus("good", "Monitoring");
+      els.overlayText.textContent = "Monitoring…";
+
+      renderResult(data);
+      recordVote(data?.predicted_label, data?.confidence);
+    } catch (e) {
+      // Don’t crash, just show error and keep trying next second
+      setStatus("warn", "API issue");
+      els.overlayText.textContent = "Trying…";
+      showError(String(e?.message || e));
+    } finally {
+      inFlight = false;
+    }
+  }
+
+  function startLoop() {
+    // run immediately, then every 1s (but captureOnce blocks overlap)
+    captureOnce();
+    loopTimer = setInterval(captureOnce, CAPTURE_INTERVAL_MS);
+  }
+
+  function stopLoop() {
+    if (loopTimer) clearInterval(loopTimer);
+    loopTimer = null;
+    inFlight = false;
+  }
+
+  // -------- Controls --------
+  async function startMonitoring() {
+    clearError();
+    setStatus("warn", "Starting…");
+    els.overlayText.textContent = "Starting…";
+
+    try {
+      await startCamera();
+
+      running = true;
+      els.startBtn.disabled = true;
+      els.stopBtn.disabled = false;
+
+      setStatus("good", "Monitoring");
+      els.overlayText.textContent = "Monitoring…";
+
+      resetVoteWindow(Date.now());
+      startLoop();
+    } catch (e) {
+      running = false;
+      setStatus("bad", "Camera error");
+      els.overlayText.textContent = "Tap Start";
+      showError(String(e?.message || e));
+    }
+  }
+
+  async function stopMonitoring() {
+    running = false;
+    stopLoop();
+
+    els.startBtn.disabled = false;
+    els.stopBtn.disabled = true;
+
+    els.overlayText.textContent = "Tap Start";
+    setStatus("warn", "Stopped");
+
+    // don’t kill camera preview completely (feels nicer)
+    // BUT if you want to fully stop camera, uncomment:
+    // await stopCamera();
+  }
+
+  // -------- Health ping --------
+  async function pingHealth() {
+    try {
+      const res = await fetch(`${window.API_BASE}/health`, { method: "GET" });
+      if (!res.ok) throw new Error(`Health ${res.status}`);
+      setStatus("good", "Ready");
+    } catch {
+      setStatus("warn", "Ready (health unknown)");
+    }
+  }
+
+  // -------- Init --------
+  function init() {
+    // Grab DOM elements (and guarantee they exist)
+    els.statusDot = mustGet("statusDot");
+    els.statusText = mustGet("statusText");
+    els.fpsBadge = mustGet("fpsBadge");
+    els.overlayText = mustGet("overlayText");
+    els.startBtn = mustGet("startBtn");
+    els.stopBtn = mustGet("stopBtn");
+    els.switchBtn = mustGet("switchBtn");
+    els.video = mustGet("video");
+    els.canvas = mustGet("canvas");
+    els.errorBox = mustGet("errorBox");
+
+    els.currentLabel = mustGet("currentLabel");
+    els.currentConf = mustGet("currentConf");
+    els.topKList = mustGet("topKList");
+
+    els.minuteVerdictValue = mustGet("minuteVerdictValue");
+    els.minuteVerdictMeta = mustGet("minuteVerdictMeta");
+
+    els.apiBaseText = mustGet("apiBaseText");
+
+    els.apiBaseText.textContent = window.API_BASE;
+    els.fpsBadge.textContent = `${FPS} FPS`;
+
+    setStatus("warn", "Idle");
+    els.overlayText.textContent = "Tap Start";
+
+    els.startBtn.addEventListener("click", startMonitoring);
+    els.stopBtn.addEventListener("click", stopMonitoring);
+    els.switchBtn.addEventListener("click", switchCamera);
+
+    pingHealth();
+
+    // optional: preload camera preview without starting monitoring
+    // (comment out if you don’t want permission prompt until Start)
+    // startCamera().then(() => setStatus("good", "Ready")).catch(() => {});
+  }
+
+  window.addEventListener("DOMContentLoaded", init);
+})();
