@@ -1,147 +1,54 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FridgeCam — Food Freshness Live</title>
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <div class="app">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🧊📷</div>
-        <div>
-          <div class="title">FridgeCam</div>
-          <div class="subtitle">Food freshness — live (1 result/min)</div>
-        </div>
-      </div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Food Freshness Classifier</title>
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
+      video { width: 100%; max-width: 520px; border-radius: 12px; background: #111; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+      button, input { padding: 10px 12px; }
+      pre { background: #f6f6f6; padding: 12px; border-radius: 12px; overflow: auto; }
+      .error { color: #b00020; white-space: pre-wrap; }
+      .ok { color: #0b6b0b; }
+    </style>
 
-      <button id="btnSettings" class="icon-btn" aria-label="Settings">⚙️</button>
-    </header>
+    <script>
+      // ✅ If using GitHub Pages, put your Space URL here:
+      // window.API_BASE = "https://<your-space-subdomain>.hf.space";
+      // If hosting inside the Space, leave empty:
+      window.API_BASE = "";
+    </script>
 
-    <main class="content">
-      <section class="card camera-card">
-        <div class="card-header">
-          <div class="h">Live Camera</div>
-          <div class="pill" id="pillStatus">Idle</div>
-        </div>
+    <script src="app.js" defer></script>
+  </head>
 
-        <div class="camera-wrap">
-          <video id="video" autoplay playsinline muted></video>
-          <div class="overlay">
-            <div class="overlay-top">
-              <div class="mini">
-                <div class="mini-label">Frames this minute</div>
-                <div class="mini-value"><span id="framesCount">0</span>/60</div>
-              </div>
-              <div class="mini">
-                <div class="mini-label">API</div>
-                <div class="mini-value" id="apiState">Not connected</div>
-              </div>
-            </div>
+  <body>
+    <h1>Food Freshness Classifier</h1>
 
-            <div class="overlay-bottom">
-              <div class="progress">
-                <div class="bar" id="progressBar"></div>
-              </div>
-              <div class="hint" id="hintText">Tap Start to begin monitoring</div>
-            </div>
-          </div>
-        </div>
+    <div class="row">
+      <button id="startBtn">Start camera</button>
+      <button id="stopBtn" disabled>Stop</button>
 
-        <div class="actions">
-          <button id="btnStart" class="btn primary">Start Monitoring</button>
-          <button id="btnStop" class="btn ghost" disabled>Stop</button>
-        </div>
-
-        <p class="note">
-          Tip: Point the camera at the shelf area. This captures 1 frame/sec and decides
-          the final label once per minute using a majority vote.
-        </p>
-      </section>
-
-      <section class="card result-card">
-        <div class="card-header">
-          <div class="h">LIVE Result</div>
-          <div class="pill subtle" id="pillLive">Waiting…</div>
-        </div>
-
-        <div class="live-result">
-          <div class="big" id="liveLabel">—</div>
-          <div class="meta">
-            <div class="meta-item">
-              <div class="meta-k">Confidence</div>
-              <div class="meta-v" id="liveConf">—</div>
-            </div>
-            <div class="meta-item">
-              <div class="meta-k">Majority</div>
-              <div class="meta-v" id="liveMajority">—</div>
-            </div>
-            <div class="meta-item">
-              <div class="meta-k">Minute</div>
-              <div class="meta-v" id="minuteIndex">0</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="chips" id="topChips"></div>
-      </section>
-
-      <section class="card history-card">
-        <div class="card-header">
-          <div class="h">History</div>
-          <button id="btnClear" class="btn small ghost">Clear</button>
-        </div>
-
-        <div id="historyList" class="history-list">
-          <div class="empty">No results yet.</div>
-        </div>
-      </section>
-    </main>
-
-    <!-- Settings sheet -->
-    <div id="sheetBackdrop" class="backdrop hidden"></div>
-    <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Settings">
-      <div class="sheet-handle"></div>
-      <div class="sheet-title">Settings</div>
-
-      <label class="field">
-        <span class="field-label">API Base URL</span>
-        <input id="apiUrl" type="url" placeholder="https://your-space.hf.space" />
-        <span class="field-help">Must allow CORS from your GitHub Pages domain.</span>
+      <label>
+        top_k:
+        <input id="topK" type="number" min="1" max="10" value="3" style="width:80px" />
       </label>
 
-      <div class="row">
-        <label class="field inline">
-          <span class="field-label">Frames / second</span>
-          <input id="fps" type="number" min="1" max="2" step="1" value="1" />
-        </label>
-
-        <label class="field inline">
-          <span class="field-label">Send size (px)</span>
-          <input id="sendSize" type="number" min="160" max="640" step="10" value="320" />
-        </label>
-      </div>
-
-      <label class="field">
-        <span class="field-label">Minute window (frames)</span>
-        <input id="windowFrames" type="number" min="30" max="120" step="10" value="60" />
+      <label>
+        interval (ms):
+        <input id="intervalMs" type="number" min="250" value="1500" style="width:110px" />
       </label>
-
-      <div class="actions">
-        <button id="btnSave" class="btn primary">Save</button>
-        <button id="btnClose" class="btn ghost">Close</button>
-      </div>
-
-      <p class="note">
-        On iPhone/Safari, the camera requires HTTPS and user interaction (tapping Start).
-      </p>
     </div>
 
-    <canvas id="canvas" class="hidden"></canvas>
-  </div>
+    <div id="status" class="ok">Loading…</div>
+    <div id="error" class="error"></div>
 
-  <script src="app.js"></script>
-</body>
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <h2>Result</h2>
+    <pre id="result">{}</pre>
+  </body>
 </html>
