@@ -4,10 +4,354 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f19" />
-  <title>Food Freshness Classifier</title>
+  <title>Food Classifier</title>
 
-  <!-- IMPORTANT: absolute path + cache buster -->
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    :root{
+      --bg: #0b0f19;
+      --card: rgba(255,255,255,0.06);
+      --card2: rgba(255,255,255,0.08);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.62);
+      --line: rgba(255,255,255,0.12);
+      --shadow: 0 18px 60px rgba(0,0,0,0.45);
+      --radius: 18px;
+      --radius2: 26px;
+      --good: rgba(0,255,170,0.55);
+      --bad: rgba(255,80,80,0.55);
+      --accent: rgba(120,65,255,0.22);
+      --accent2: rgba(120,65,255,0.35);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 700px at 20% 0%, rgba(120,65,255,0.22), transparent 55%),
+        radial-gradient(900px 600px at 90% 20%, rgba(0,210,255,0.18), transparent 60%),
+        radial-gradient(900px 700px at 60% 110%, rgba(0,255,170,0.12), transparent 60%),
+        var(--bg);
+    }
+
+    .topbar{
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      padding: 14px 16px;
+      background: rgba(11,15,25,0.72);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand{
+      display:flex;
+      gap: 12px;
+      align-items:center;
+      min-width: 0;
+    }
+    .logo{
+      width: 44px;
+      height: 44px;
+      display:grid;
+      place-items:center;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.10);
+      border: 1px solid var(--line);
+      flex: 0 0 auto;
+    }
+    .brand-text{ min-width:0; }
+    .brand-text h1{
+      margin:0;
+      font-size: 16px;
+      letter-spacing: .2px;
+      line-height: 1.15;
+    }
+    .sub{
+      margin:3px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 45vw;
+    }
+
+    .actions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex: 0 0 auto;
+    }
+
+    .btn{
+      appearance:none;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor:pointer;
+      transition: transform .06s ease, background .15s ease;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active{ transform: scale(0.98); }
+    .btn:disabled{ opacity: .55; cursor:not-allowed; }
+    .btn.primary{
+      background: var(--accent);
+      border-color: var(--accent2);
+    }
+    .btn.primary:hover{ background: rgba(120,65,255,0.28); }
+
+    .wrap{
+      width: min(1100px, 100%);
+      margin: 16px auto 26px;
+      padding: 0 14px 18px;
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.05));
+      border: 1px solid var(--line);
+      border-radius: var(--radius2);
+      box-shadow: var(--shadow);
+    }
+
+    .camera-card{ padding: 14px; }
+
+    .card-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      padding: 10px 8px 12px;
+    }
+    .card-head h2{
+      margin:0;
+      font-size: 14px;
+      color: rgba(255,255,255,0.88);
+      letter-spacing: .2px;
+    }
+
+    .status{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .dot{
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.22);
+      border: 1px solid var(--line);
+      flex: 0 0 auto;
+    }
+    .dot.on{ background: var(--good); border-color: rgba(0,255,170,0.6); }
+    .dot.err{ background: var(--bad); border-color: rgba(255,80,80,0.6); }
+
+    .camera{
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius2);
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,0.25);
+    }
+
+    video{
+      width: 100%;
+      height: auto;
+      display:block;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+    }
+
+    .overlay{
+      position:absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display:flex;
+      justify-content:flex-start;
+      pointer-events:none;
+    }
+
+    .pill{
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.16);
+      backdrop-filter: blur(10px);
+    }
+    .pill-label{ font-size: 12px; color: var(--muted); }
+    .pill-value{ font-size: 12px; font-weight: 800; }
+
+    .hint{
+      margin: 10px 6px 2px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .badge{
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid var(--line);
+      color: rgba(255,255,255,0.85);
+      white-space: nowrap;
+    }
+    .badge.ok{
+      background: rgba(0,255,170,0.10);
+      border-color: rgba(0,255,170,0.22);
+    }
+
+    .big{
+      padding: 6px 14px 12px;
+    }
+    .big-label{
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: .2px;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+    .big-sub{
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .sep{
+      height: 1px;
+      background: var(--line);
+      margin: 10px 0;
+    }
+
+    .small-title{
+      margin: 0 14px 8px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 800;
+      letter-spacing: .15px;
+    }
+
+    .list{
+      margin: 0 14px 14px 34px;
+      padding: 0;
+      color: rgba(255,255,255,0.88);
+    }
+    .list li{
+      margin: 8px 0;
+      font-size: 13px;
+      line-height: 1.2;
+    }
+    .krow{
+      display:flex;
+      justify-content:space-between;
+      gap: 10px;
+    }
+    .kleft{ min-width:0; }
+    .kname{
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .kprob{ color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    .error{
+      margin: 0 14px 14px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,80,80,0.35);
+      background: rgba(255,80,80,0.12);
+      color: rgba(255,255,255,0.92);
+      font-size: 12px;
+    }
+
+    .history{
+      list-style:none;
+      margin: 0 14px 14px;
+      padding: 0;
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+    }
+    .history li{
+      display:flex;
+      justify-content:space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.05);
+    }
+    .hlabel{
+      font-weight: 900;
+      font-size: 13px;
+      min-width:0;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 70%;
+    }
+    .hmeta{
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .foot{
+      width: min(1100px, 100%);
+      margin: 0 auto 18px;
+      padding: 0 14px;
+      color: var(--muted);
+      font-size: 12px;
+      display:flex;
+      gap: 8px;
+      align-items:center;
+      flex-wrap: wrap;
+    }
+    code{
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.85);
+      overflow-wrap:anywhere;
+    }
+
+    .hidden{ display:none; }
+
+    @media (min-width: 900px){
+      .grid{ grid-template-columns: 1fr 1fr; }
+      video{ aspect-ratio: 16 / 9; }
+      .sub{ max-width: 520px; }
+    }
+  </style>
 </head>
 
 <body>
@@ -16,7 +360,7 @@
       <div class="logo" aria-hidden="true">🍎</div>
       <div class="brand-text">
         <h1>Food Classifier</h1>
-        <p class="sub">1 frame/sec • 1 verdict/min</p>
+        <p class="sub">1 frame/sec • 1 verdict/min • most frequent label wins</p>
       </div>
     </div>
 
@@ -39,7 +383,6 @@
 
       <div class="camera">
         <video id="video" playsinline muted></video>
-
         <div class="overlay">
           <div class="pill">
             <span class="pill-label">Next verdict in</span>
@@ -49,10 +392,9 @@
       </div>
 
       <div class="hint" id="hint">
-        Tip: On phones, allow camera permission. Use “Switch” for front/back camera.
+        Tip: Allow camera permission. Use “Switch” for front/back camera.
       </div>
 
-      <!-- hidden canvas for capturing frames -->
       <canvas id="canvas" class="hidden" width="640" height="640"></canvas>
     </section>
 
@@ -96,7 +438,7 @@
   </main>
 
   <footer class="foot">
-    <span class="muted">API:</span>
+    <span>API:</span>
     <code id="apiShow">—</code>
   </footer>
 
@@ -105,7 +447,370 @@
     window.API_BASE = "https://elgatito1-food-classifier.hf.space";
   </script>
 
-  <!-- IMPORTANT: absolute path + cache buster -->
-  <script src="/app.js?v=3" defer></script>
+  <script>
+    (() => {
+      const TOP_K = 3;
+      const FPS = 1;
+      const MINUTE_MS = 60_000;
+
+      const API_BASE = (window.API_BASE || "").replace(/\/+$/, "");
+
+      const $ = (id) => document.getElementById(id);
+
+      const video = $("video");
+      const canvas = $("canvas");
+      const startBtn = $("startBtn");
+      const stopBtn = $("stopBtn");
+      const switchBtn = $("switchBtn");
+
+      const statusDot = $("statusDot");
+      const statusText = $("statusText");
+      const countdownEl = $("countdown");
+
+      const liveLabel = $("liveLabel");
+      const liveConf = $("liveConf");
+      const liveBadge = $("liveBadge");
+      const topKList = $("topKList");
+
+      const minuteLabel = $("minuteLabel");
+      const minuteMeta = $("minuteMeta");
+      const minuteBadge = $("minuteBadge");
+      const historyList = $("historyList");
+
+      const errorBox = $("errorBox");
+      const hint = $("hint");
+      const apiShow = $("apiShow");
+
+      // Safety: prevent null errors
+      const required = [
+        video, canvas, startBtn, stopBtn, switchBtn,
+        statusDot, statusText, countdownEl,
+        liveLabel, liveConf, liveBadge, topKList,
+        minuteLabel, minuteMeta, minuteBadge, historyList,
+        errorBox, apiShow
+      ];
+      if (required.some(x => !x)) {
+        console.error("Missing required DOM elements. Check IDs in HTML.");
+        return;
+      }
+
+      apiShow.textContent = API_BASE || "—";
+
+      let stream = null;
+      let captureTimer = null;
+      let minuteTimer = null;
+      let usingFront = false;
+      let inFlight = false;
+
+      // Minute aggregation
+      let minuteStart = 0;
+      let frameCounts = new Map(); // label -> count
+      let confSums = new Map();    // label -> sum(conf)
+      let framesThisMinute = 0;
+
+      function setStatus(kind, text){
+        statusText.textContent = text;
+        statusDot.classList.remove("on","err");
+        if (kind === "on") statusDot.classList.add("on");
+        if (kind === "err") statusDot.classList.add("err");
+      }
+
+      function showError(msg){
+        errorBox.hidden = false;
+        errorBox.textContent = msg;
+        setStatus("err", "Error");
+      }
+
+      function clearError(){
+        errorBox.hidden = true;
+        errorBox.textContent = "";
+      }
+
+      function fmtPct(x){
+        if (typeof x !== "number" || !isFinite(x)) return "—";
+        return (x * 100).toFixed(1) + "%";
+      }
+
+      function fmtTime(ts){
+        const d = new Date(ts);
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      }
+
+      function updateCountdown(){
+        if (!minuteStart){
+          countdownEl.textContent = "60s";
+          return;
+        }
+        const elapsed = Date.now() - minuteStart;
+        const left = Math.max(0, MINUTE_MS - elapsed);
+        countdownEl.textContent = Math.ceil(left / 1000) + "s";
+      }
+
+      function resetMinute(){
+        frameCounts = new Map();
+        confSums = new Map();
+        framesThisMinute = 0;
+        minuteStart = Date.now();
+        updateCountdown();
+
+        minuteLabel.textContent = "—";
+        minuteMeta.textContent = "Collecting frames…";
+        minuteBadge.textContent = "Running";
+      }
+
+      function drawToCanvas(){
+        const vw = video.videoWidth || 0;
+        const vh = video.videoHeight || 0;
+        if (!vw || !vh) return false;
+
+        const size = Math.min(vw, vh);
+        const sx = Math.floor((vw - size) / 2);
+        const sy = Math.floor((vh - size) / 2);
+
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        canvas.width = 640;
+        canvas.height = 640;
+
+        ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height);
+        return true;
+      }
+
+      function canvasToBlob(){
+        return new Promise((resolve) => {
+          canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9);
+        });
+      }
+
+      function renderLive(data){
+        const label = data?.predicted_label ?? "—";
+        const conf = data?.confidence;
+
+        liveLabel.textContent = label;
+        liveConf.textContent = "Confidence: " + fmtPct(conf);
+        liveBadge.textContent = "top_k=" + TOP_K;
+
+        topKList.innerHTML = "";
+        const arr = Array.isArray(data?.top_k) ? data.top_k : [];
+        for (const item of arr){
+          const li = document.createElement("li");
+          const row = document.createElement("div");
+          row.className = "krow";
+
+          const left = document.createElement("div");
+          left.className = "kleft";
+
+          const name = document.createElement("div");
+          name.className = "kname";
+          name.textContent = item?.label ?? item?.class ?? "—";
+
+          const right = document.createElement("div");
+          right.className = "kprob";
+          right.textContent = fmtPct(item?.prob);
+
+          left.appendChild(name);
+          row.appendChild(left);
+          row.appendChild(right);
+          li.appendChild(row);
+          topKList.appendChild(li);
+        }
+      }
+
+      function aggregateForMinute(data){
+        if (!minuteStart) resetMinute();
+
+        const label = data?.predicted_label;
+        const conf = (typeof data?.confidence === "number") ? data.confidence : 0;
+        if (!label) return;
+
+        framesThisMinute += 1;
+        frameCounts.set(label, (frameCounts.get(label) || 0) + 1);
+        confSums.set(label, (confSums.get(label) || 0) + conf);
+
+        minuteMeta.textContent = "Frames this minute: " + framesThisMinute;
+      }
+
+      function finalizeMinuteVerdict(){
+        if (!minuteStart) return;
+
+        if (framesThisMinute === 0 || frameCounts.size === 0){
+          minuteLabel.textContent = "No frames captured";
+          minuteMeta.textContent = "Try better lighting / keep object centered.";
+          minuteBadge.textContent = "—";
+          resetMinute();
+          return;
+        }
+
+        let bestLabel = null;
+        let bestCount = -1;
+        let bestAvg = -1;
+
+        for (const [label, count] of frameCounts.entries()){
+          const sum = confSums.get(label) || 0;
+          const avg = sum / Math.max(1, count);
+
+          if (count > bestCount || (count === bestCount && avg > bestAvg)){
+            bestLabel = label;
+            bestCount = count;
+            bestAvg = avg;
+          }
+        }
+
+        const now = Date.now();
+        minuteLabel.textContent = bestLabel;
+        minuteMeta.textContent =
+          `${bestCount}/${framesThisMinute} frames • avg conf ${fmtPct(bestAvg)} • ${fmtTime(now)}`;
+        minuteBadge.textContent = "VERDICT";
+
+        const li = document.createElement("li");
+        const left = document.createElement("div");
+        const right = document.createElement("div");
+        left.className = "hlabel";
+        right.className = "hmeta";
+        left.textContent = bestLabel;
+        right.textContent = `${bestCount}/${framesThisMinute} • ${fmtTime(now)}`;
+        li.appendChild(left);
+        li.appendChild(right);
+        historyList.insertBefore(li, historyList.firstChild);
+
+        while (historyList.children.length > 6){
+          historyList.removeChild(historyList.lastChild);
+        }
+
+        resetMinute();
+      }
+
+      async function sendFrame(){
+        if (inFlight || !stream) return;
+
+        const ok = drawToCanvas();
+        if (!ok) return;
+
+        inFlight = true;
+        try{
+          const blob = await canvasToBlob();
+          if (!blob) throw new Error("Could not encode frame.");
+
+          const form = new FormData();
+          form.append("file", blob, "frame.jpg");
+
+          const url = `${API_BASE}/predict?top_k=${TOP_K}`;
+
+          const res = await fetch(url, { method:"POST", body:form, mode:"cors" });
+          if (!res.ok){
+            const txt = await res.text().catch(()=>"");
+            throw new Error(`API ${res.status}: ${txt.slice(0,150)}`);
+          }
+
+          const data = await res.json();
+          clearError();
+          renderLive(data);
+          aggregateForMinute(data);
+        } catch(e){
+          console.error(e);
+          showError(String(e.message || e));
+        } finally{
+          inFlight = false;
+        }
+      }
+
+      function startLoops(){
+        resetMinute();
+
+        // 1 fps
+        captureTimer = setInterval(sendFrame, Math.floor(1000 / FPS));
+
+        // countdown + finalize minute
+        minuteTimer = setInterval(() => {
+          updateCountdown();
+          if (!minuteStart) return;
+          if ((Date.now() - minuteStart) >= MINUTE_MS){
+            finalizeMinuteVerdict();
+          }
+        }, 250);
+      }
+
+      function stopLoops(){
+        if (captureTimer) { clearInterval(captureTimer); captureTimer = null; }
+        if (minuteTimer) { clearInterval(minuteTimer); minuteTimer = null; }
+        inFlight = false;
+        minuteStart = 0;
+        updateCountdown();
+      }
+
+      async function startCamera(){
+        clearError();
+
+        if (!API_BASE){
+          showError('API_BASE is empty. It must be: https://elgatito1-food-classifier.hf.space');
+          return;
+        }
+
+        stopCamera(); // stop previous if any
+
+        try{
+          setStatus("", "Requesting camera…");
+
+          const constraints = {
+            audio:false,
+            video:{
+              facingMode: usingFront ? "user" : { ideal: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          };
+
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          video.srcObject = stream;
+          await video.play();
+
+          if (hint) hint.textContent = "Running… 1 frame per second.";
+
+          setStatus("on", "Live");
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+
+          startLoops();
+        } catch(e){
+          console.error(e);
+          showError("Camera permission denied or not available. Try Switch or a different browser.");
+        }
+      }
+
+      function stopCamera(){
+        stopLoops();
+
+        if (video){
+          video.pause?.();
+          video.srcObject = null;
+        }
+
+        if (stream){
+          for (const t of stream.getTracks()) t.stop();
+          stream = null;
+        }
+
+        setStatus("", "Idle");
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+
+      async function switchCamera(){
+        usingFront = !usingFront;
+        if (stopBtn.disabled) return; // not running
+        await startCamera();
+      }
+
+      // Bind buttons
+      startBtn.addEventListener("click", startCamera);
+      stopBtn.addEventListener("click", stopCamera);
+      switchBtn.addEventListener("click", switchCamera);
+
+      // Init UI
+      setStatus("", "Idle");
+      updateCountdown();
+      liveBadge.textContent = "top_k=" + TOP_K;
+      minuteBadge.textContent = "—";
+    })();
+  </script>
 </body>
 </html>
