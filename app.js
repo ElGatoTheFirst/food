@@ -1,137 +1,163 @@
-// =======================
-// CONFIG (IMPORTANT)
-// =======================
-// Replace this with your REAL space subdomain.
-// It usually looks like: https://<username>-<space-name>.hf.space
-const HF_SPACE_BASE_URL = "https://elgatito1-food-classifier.hf.space"; // <-- change if needed
+(() => {
+  const API_BASE = (window.API_BASE || "").replace(/\/$/, ""); // "" = same-origin
 
-const API_PREDICT_PATH = "/predict";
+  const $ = (id) => document.getElementById(id);
 
-// =======================
-// HELPERS
-// =======================
-function apiUrl(topK = 3) {
-  const base = HF_SPACE_BASE_URL.replace(/\/$/, "");
-  return `${base}${API_PREDICT_PATH}?top_k=${encodeURIComponent(topK)}`;
-}
-
-async function sendFrameToApi(blob, topK = 3) {
-  const form = new FormData();
-
-  // Your FastAPI expects the field name: `file`
-  form.append("file", blob, "frame.jpg");
-
-  const res = await fetch(apiUrl(topK), {
-    method: "POST",
-    body: form,
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API ${res.status}: ${text}`);
+  function setText(id, text) {
+    const el = $(id);
+    if (el) el.textContent = text;
   }
 
-  return res.json();
-}
-
-// =======================
-// CAMERA CAPTURE
-// =======================
-const videoEl = document.getElementById("video");
-const canvasEl = document.getElementById("canvas");
-const resultEl = document.getElementById("result");
-
-let stream = null;
-let timer = null;
-let inFlight = false;
-
-async function startCamera() {
-  stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-  videoEl.srcObject = stream;
-  await videoEl.play();
-}
-
-function stopCamera() {
-  if (stream) {
-    stream.getTracks().forEach((t) => t.stop());
-    stream = null;
-  }
-}
-
-function captureFrameToBlob() {
-  const w = videoEl.videoWidth;
-  const h = videoEl.videoHeight;
-  if (!w || !h) return Promise.resolve(null);
-
-  canvasEl.width = w;
-  canvasEl.height = h;
-
-  const ctx = canvasEl.getContext("2d");
-  ctx.drawImage(videoEl, 0, 0, w, h);
-
-  return new Promise((resolve) => {
-    canvasEl.toBlob((b) => resolve(b), "image/jpeg", 0.9);
-  });
-}
-
-// =======================
-// LOOP
-// =======================
-async function captureOnce(topK = 3) {
-  if (inFlight) return;
-  inFlight = true;
-
-  try {
-    const blob = await captureFrameToBlob();
-    if (!blob) return;
-
-    const data = await sendFrameToApi(blob, topK);
-    renderResult(data);
-  } catch (err) {
-    console.error(err);
-    resultEl.textContent = String(err.message || err);
-  } finally {
-    inFlight = false;
-  }
-}
-
-function startMonitoringLoop(intervalMs = 1500, topK = 3) {
-  if (timer) clearInterval(timer);
-  timer = setInterval(() => captureOnce(topK), intervalMs);
-}
-
-function stopMonitoringLoop() {
-  if (timer) clearInterval(timer);
-  timer = null;
-}
-
-// =======================
-// UI
-// =======================
-function renderResult(data) {
-  // Expected shape from your API:
-  // { predicted_label, confidence, top_k: [{label, confidence}, ...] }
-  const lines = [];
-
-  if (data?.predicted_label) {
-    lines.push(`Predicted: ${data.predicted_label} (${(data.confidence * 100).toFixed(1)}%)`);
+  function setError(err) {
+    setText("error", err ? String(err) : "");
   }
 
-  if (Array.isArray(data?.top_k)) {
-    lines.push("");
-    lines.push("Top K:");
-    for (const item of data.top_k) {
-      lines.push(`- ${item.label}: ${(item.confidence * 100).toFixed(1)}%`);
+  async function checkHealth() {
+    try {
+      const r = await fetch(`${API_BASE}/health`);
+      const t = await r.text();
+      if (!r.ok) throw new Error(`Health check failed (${r.status}): ${t.slice(0, 200)}`);
+      setText("status", `API OK ✅ ${t}`);
+      setError("");
+    } catch (e) {
+      setText(
+        "status",
+        "API not reachable. If using GitHub Pages, set window.API_BASE to your Space URL."
+      );
+      setError(e);
     }
   }
 
-  resultEl.textContent = lines.join("\n");
-}
+  let stream = null;
+  let timer = null;
+  let busy = false;
 
-// =======================
-// BOOT
-// =======================
-(async function boot() {
-  await startCamera();
-  startMonitoringLoop(1500, 3);
+  async function startCamera() {
+    const video = $("video");
+    if (!video) throw new Error("Missing <video id='video'> in HTML.");
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+      audio: false,
+    });
+
+    video.srcObject = stream;
+    await video.play();
+  }
+
+  function stopCamera() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+    }
+    setText("status", "Stopped.");
+  }
+
+  function captureToBlob() {
+    const video = $("video");
+    const canvas = $("canvas");
+    if (!video || !canvas) throw new Error("Missing #video or #canvas in HTML.");
+
+    const w = video.videoWidth || 640;
+    const h = video.videoHeight || 480;
+
+    canvas.width = w;
+    canvas.height = h;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, w, h);
+
+    return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+  }
+
+  async function sendFrame(topK) {
+    const blob = await captureToBlob();
+    if (!blob) throw new Error("Failed to capture frame.");
+
+    const fd = new FormData();
+    fd.append("file", blob, "frame.jpg");
+
+    const url = `${API_BASE}/predict?top_k=${encodeURIComponent(topK)}`;
+    const res = await fetch(url, { method: "POST", body: fd });
+
+    const text = await res.text();
+
+    if (!res.ok) {
+      // Show a short snippet so the UI doesn't spam huge HTML pages
+      throw new Error(`API ${res.status}: ${text.slice(0, 300)}`);
+    }
+
+    return JSON.parse(text);
+  }
+
+  function renderResult(data) {
+    // Expected keys from your API: predicted_label, confidence, top_k, top_k_probs, top_k_classes, top_k_labels :contentReference[oaicite:2]{index=2}
+    const out = {
+      predicted_label: data?.predicted_label,
+      confidence: data?.confidence,
+      top_k: data?.top_k,
+      top_k_probs: data?.top_k_probs,
+      top_k_labels: data?.top_k_labels,
+      top_k_classes: data?.top_k_classes,
+    };
+    setText("result", JSON.stringify(out, null, 2));
+  }
+
+  async function captureOnce() {
+    if (busy) return;
+    busy = true;
+
+    try {
+      const topK = Number($("topK")?.value || 3);
+      const data = await sendFrame(topK);
+      setText("status", "Prediction OK ✅");
+      setError("");
+      renderResult(data);
+    } catch (e) {
+      setText("status", "Prediction failed ❌");
+      setError(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function startLoop() {
+    const intervalMs = Math.max(250, Number($("intervalMs")?.value || 1500));
+    if (timer) clearInterval(timer);
+    timer = setInterval(captureOnce, intervalMs);
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    // Ensure required elements exist (prevents your “null.textContent” crash)
+    if (!$("status") || !$("error") || !$("result") || !$("video") || !$("canvas")) {
+      console.error("Your HTML is missing required elements. Use the provided index.html.");
+    }
+
+    await checkHealth();
+
+    $("startBtn")?.addEventListener("click", async () => {
+      try {
+        setError("");
+        setText("status", "Starting camera…");
+        await startCamera();
+        startLoop();
+        $("startBtn").disabled = true;
+        $("stopBtn").disabled = false;
+        setText("status", "Running…");
+      } catch (e) {
+        setText("status", "Camera start failed ❌");
+        setError(e);
+      }
+    });
+
+    $("stopBtn")?.addEventListener("click", () => {
+      stopCamera();
+      $("startBtn").disabled = false;
+      $("stopBtn").disabled = true;
+    });
+  });
 })();
