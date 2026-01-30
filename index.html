@@ -1,55 +1,163 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Food Freshness Classifier</title>
-    <style>
-      body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
-      video { width: 100%; max-width: 520px; border-radius: 12px; background: #111; }
-      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
-      button, input { padding: 10px 12px; }
-      pre { background: #f6f6f6; padding: 12px; border-radius: 12px; overflow: auto; }
-      .error { color: #b00020; white-space: pre-wrap; }
-      .ok { color: #0b6b0b; }
-    </style>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Food Classifier</title>
+  <meta name="color-scheme" content="dark light" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
 
-    <script>
-      // ✅ If using GitHub Pages, put your Space URL here:
-      // window.API_BASE = "https://<your-space-subdomain>.hf.space";
-      // If hosting inside the Space, leave empty:
-      window.API_BASE = "https://elgatito1-food-classifier.hf.space";
-      
-    </script>
+<body>
+  <div class="bg"></div>
 
-    <script src="app.js" defer></script>
-  </head>
-
-  <body>
-    <h1>Food Freshness Classifier</h1>
-
-    <div class="row">
-      <button id="startBtn">Start camera</button>
-      <button id="stopBtn" disabled>Stop</button>
-
-      <label>
-        top_k:
-        <input id="topK" type="number" min="1" max="10" value="3" style="width:80px" />
-      </label>
-
-      <label>
-        interval (ms):
-        <input id="intervalMs" type="number" min="250" value="1500" style="width:110px" />
-      </label>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">🍎</div>
+      <div class="brandText">
+        <div class="title">Food Classifier</div>
+        <div class="subtitle">1 fps • 60 sec majority vote</div>
+      </div>
     </div>
 
-    <div id="status" class="ok">Loading…</div>
-    <div id="error" class="error"></div>
+    <div class="pill" id="apiPill" title="API base url">API: —</div>
+  </header>
 
-    <video id="video" playsinline autoplay muted></video>
-    <canvas id="canvas" style="display:none;"></canvas>
+  <main class="wrap">
+    <section class="grid">
+      <!-- LEFT: INPUT -->
+      <div class="card">
+        <div class="cardHead">
+          <div class="cardTitle">Input</div>
+          <div class="seg">
+            <button class="segBtn isActive" id="tabCamera" type="button">Camera</button>
+            <button class="segBtn" id="tabUpload" type="button">Upload</button>
+          </div>
+        </div>
 
-    <h2>Result</h2>
-    <pre id="result">{}</pre>
-  </body>
+        <!-- Camera panel -->
+        <div id="panelCamera" class="panel">
+          <div class="videoBox">
+            <video id="video" playsinline autoplay muted></video>
+            <canvas id="canvas" class="hidden"></canvas>
+
+            <div class="videoOverlay">
+              <div class="badge" id="fpsBadge">1 fps</div>
+              <div class="badge" id="minuteBadge">00:60</div>
+            </div>
+          </div>
+
+          <div class="controls">
+            <div class="field">
+              <label for="topKCam">Top-K</label>
+              <input id="topKCam" type="number" min="1" max="10" value="3" />
+            </div>
+
+            <button class="btn primary" id="btnStart" type="button">Start</button>
+            <button class="btn" id="btnStop" type="button" disabled>Stop</button>
+          </div>
+
+          <div class="hint">
+            Tip: On phone, allow camera permission. Use good lighting.
+          </div>
+        </div>
+
+        <!-- Upload panel -->
+        <div id="panelUpload" class="panel hidden">
+          <label class="drop">
+            <input id="fileInput" type="file" accept="image/*" />
+            <div class="dropInner">
+              <div class="dropIcon">📷</div>
+              <div class="dropText">
+                <div class="dropTitle">Tap to choose an image</div>
+                <div class="dropSub">jpg / png / webp</div>
+              </div>
+            </div>
+          </label>
+
+          <div class="previewRow">
+            <img id="previewImg" class="previewImg hidden" alt="preview" />
+            <div id="previewEmpty" class="previewEmpty">No image selected</div>
+          </div>
+
+          <div class="controls">
+            <div class="field">
+              <label for="topKUpload">Top-K</label>
+              <input id="topKUpload" type="number" min="1" max="10" value="3" />
+            </div>
+
+            <button class="btn primary" id="btnPredict" type="button" disabled>Predict</button>
+          </div>
+        </div>
+
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <p>
+            This UI uses:
+            <code>window.API_BASE</code>
+            set below.
+          </p>
+          <p class="small">
+            If you ever need to change it, edit the line in this HTML.
+          </p>
+        </details>
+      </div>
+
+      <!-- RIGHT: RESULTS -->
+      <div class="card">
+        <div class="cardHead">
+          <div class="cardTitle">Result</div>
+          <div class="status" id="status">Ready.</div>
+        </div>
+
+        <div class="resultGrid">
+          <div class="big">
+            <div class="bigLabel">Minute verdict</div>
+            <div class="bigValue" id="minuteLabel">—</div>
+            <div class="bigSub" id="minuteSub">Start camera to collect votes.</div>
+          </div>
+
+          <div class="mini">
+            <div class="miniLabel">Last frame</div>
+            <div class="miniValue" id="lastFrameLabel">—</div>
+            <div class="miniSub" id="lastFrameConf">—</div>
+          </div>
+        </div>
+
+        <div class="barWrap">
+          <div class="barTop">
+            <div class="barTitle">Votes this minute</div>
+            <div class="barCount" id="voteCount">0 / 60</div>
+          </div>
+          <div class="progress">
+            <div class="progressFill" id="progressFill"></div>
+          </div>
+        </div>
+
+        <div class="listHead">
+          <div>Top labels (votes)</div>
+          <div class="muted">updates while collecting</div>
+        </div>
+
+        <ul class="list" id="voteList"></ul>
+
+        <div class="links">
+          <a href="https://elgatito1-food-classifier.hf.space/docs" target="_blank" rel="noreferrer">API Docs</a>
+          <span class="dot">•</span>
+          <a href="https://elgatito1-food-classifier.hf.space/health" target="_blank" rel="noreferrer">Health</a>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      Made for mobile • Majority vote every minute • 1 frame per second
+    </footer>
+  </main>
+
+  <!-- IMPORTANT: use your working base -->
+  <script>
+    window.API_BASE = "https://elgatito1-food-classifier.hf.space";
+  </script>
+  <script src="./app.js"></script>
+</body>
 </html>
