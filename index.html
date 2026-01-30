@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🥗 Food Freshness Scanner</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥗</text></svg>">
     <style>
         * {
             margin: 0;
@@ -71,7 +72,6 @@
             gap: 10px;
         }
 
-        /* Camera Section */
         .camera-container {
             position: relative;
             width: 100%;
@@ -115,7 +115,6 @@
             50% { opacity: 0.5; }
         }
 
-        /* Controls */
         .controls {
             display: flex;
             gap: 15px;
@@ -163,7 +162,6 @@
             transform: none !important;
         }
 
-        /* Progress Section */
         .progress-section {
             margin-top: 25px;
         }
@@ -190,7 +188,6 @@
             width: 0%;
         }
 
-        /* Results Section */
         .result-card {
             text-align: center;
             padding: 30px;
@@ -236,7 +233,6 @@
             color: #fff;
         }
 
-        /* Live Predictions */
         .live-predictions {
             margin-top: 25px;
         }
@@ -271,7 +267,6 @@
             font-weight: 600;
         }
 
-        /* Stats */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -298,7 +293,6 @@
             margin-top: 5px;
         }
 
-        /* Status Messages */
         .status {
             padding: 15px;
             border-radius: 10px;
@@ -321,7 +315,6 @@
             border: 1px solid rgba(0, 255, 136, 0.3);
         }
 
-        /* Scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -336,7 +329,6 @@
             border-radius: 10px;
         }
 
-        /* History Section */
         .history-section {
             margin-top: 30px;
         }
@@ -377,7 +369,6 @@
         </header>
 
         <div class="main-content">
-            <!-- Camera Section -->
             <div class="card">
                 <h2>📷 Live Camera</h2>
                 <div class="camera-container">
@@ -428,7 +419,6 @@
                 </div>
             </div>
 
-            <!-- Results Section -->
             <div class="card">
                 <h2>📊 Detection Results</h2>
                 
@@ -466,9 +456,9 @@
         // =============================================================================
         // CONFIGURATION
         // =============================================================================
-        const API_URL = "https://elgatito1-food-classifier.hf.space/api/predict";
-        const FRAMES_PER_CYCLE = 60;  // 60 frames per minute
-        const FRAME_INTERVAL = 1000;   // 1 frame per second (1000ms)
+        const BASE_URL = "https://elgatito1-food-classifier.hf.space";
+        const FRAMES_PER_CYCLE = 60;
+        const FRAME_INTERVAL = 1000;
 
         // =============================================================================
         // STATE
@@ -481,7 +471,7 @@
         let currentFrameCount = 0;
         let successCount = 0;
         let cycleCount = 0;
-        let predictions = {};  // { "class_name": count }
+        let predictions = {};
         let history = [];
 
         // =============================================================================
@@ -542,7 +532,6 @@
             updateProgress(0);
             updatePredictionList();
 
-            // Start capturing frames
             captureAndSend();
             frameTimer = setInterval(captureAndSend, FRAME_INTERVAL);
         }
@@ -561,19 +550,63 @@
 
             updateStatus("⏹️ Scanning stopped.", "info");
             
-            // If we have predictions, show the result
             if (Object.keys(predictions).length > 0) {
                 finalizeCycle();
             }
         }
 
         // =============================================================================
-        // FRAME CAPTURE & API CALL
+        // GRADIO API CALL (Gradio 4.x+ with SSE)
+        // =============================================================================
+        async function callGradioAPI(imageData) {
+            try {
+                // Step 1: Queue the prediction
+                const queueResponse = await fetch(`${BASE_URL}/call/predict`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ data: [imageData] })
+                });
+
+                if (!queueResponse.ok) {
+                    throw new Error(`Queue failed: ${queueResponse.status}`);
+                }
+
+                const queueResult = await queueResponse.json();
+                const eventId = queueResult.event_id;
+
+                // Step 2: Get the result
+                const resultResponse = await fetch(`${BASE_URL}/call/predict/${eventId}`);
+                
+                if (!resultResponse.ok) {
+                    throw new Error(`Result failed: ${resultResponse.status}`);
+                }
+
+                // Parse SSE response
+                const text = await resultResponse.text();
+                const lines = text.split('\n');
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = JSON.parse(line.slice(6));
+                        if (data && data.length > 0) {
+                            return data[0];
+                        }
+                    }
+                }
+                
+                return null;
+            } catch (err) {
+                console.error("API error:", err);
+                return null;
+            }
+        }
+
+        // =============================================================================
+        // FRAME CAPTURE & SEND
         // =============================================================================
         async function captureAndSend() {
             if (!isScanning) return;
 
-            // Capture frame
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
@@ -587,59 +620,50 @@
 
             updateProgress((currentFrameCount / FRAMES_PER_CYCLE) * 100);
 
-            // Send to API
-            try {
-                const response = await fetch(API_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ data: [imageData] })
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    processResponse(result);
-                }
-            } catch (err) {
-                console.error("API error:", err);
+            const result = await callGradioAPI(imageData);
+            
+            if (result) {
+                processResponse(result);
             }
 
-            // Check if cycle is complete
             if (currentFrameCount >= FRAMES_PER_CYCLE) {
                 finalizeCycle();
             }
         }
 
-        function processResponse(result) {
+        function processResponse(labelData) {
             successCount++;
             document.getElementById("successFrames").textContent = successCount;
 
-            // Parse Gradio response - it returns {data: [{label: confidence, ...}]}
-            if (result && result.data && result.data[0]) {
-                const labelData = result.data[0];
-                
-                // Find the label with highest confidence
-                let topLabel = null;
-                let topConfidence = 0;
-                
-                if (typeof labelData === "object") {
-                    // Format: {confidences: [{label, confidence}...], label: "top_label"}
-                    if (labelData.label) {
-                        topLabel = labelData.label;
-                    } else {
-                        // Find max confidence
-                        for (const [label, conf] of Object.entries(labelData)) {
-                            if (conf > topConfidence) {
-                                topConfidence = conf;
-                                topLabel = label;
-                            }
+            let topLabel = null;
+            
+            if (typeof labelData === "object") {
+                if (labelData.label) {
+                    topLabel = labelData.label;
+                } else if (labelData.confidences && labelData.confidences.length > 0) {
+                    let maxConf = 0;
+                    for (const item of labelData.confidences) {
+                        if (item.confidence > maxConf) {
+                            maxConf = item.confidence;
+                            topLabel = item.label;
+                        }
+                    }
+                } else {
+                    let maxConf = 0;
+                    for (const [label, conf] of Object.entries(labelData)) {
+                        if (typeof conf === 'number' && conf > maxConf) {
+                            maxConf = conf;
+                            topLabel = label;
                         }
                     }
                 }
+            } else if (typeof labelData === "string") {
+                topLabel = labelData;
+            }
 
-                if (topLabel) {
-                    predictions[topLabel] = (predictions[topLabel] || 0) + 1;
-                    updatePredictionList();
-                }
+            if (topLabel) {
+                predictions[topLabel] = (predictions[topLabel] || 0) + 1;
+                updatePredictionList();
             }
         }
 
@@ -647,7 +671,6 @@
         // CYCLE COMPLETION
         // =============================================================================
         function finalizeCycle() {
-            // Find the most common prediction
             let maxCount = 0;
             let winner = null;
 
@@ -666,7 +689,6 @@
                 addToHistory(winner);
             }
 
-            // Reset for next cycle if still scanning
             if (isScanning) {
                 currentFrameCount = 0;
                 successCount = 0;
@@ -725,7 +747,6 @@
                 return;
             }
 
-            // Sort by count
             const sorted = Object.entries(predictions)
                 .sort((a, b) => b[1] - a[1]);
 
