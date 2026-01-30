@@ -1,163 +1,120 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Food Classifier</title>
-  <meta name="color-scheme" content="dark light" />
-  <link rel="stylesheet" href="./styles.css" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link rel="stylesheet" href="style.css" />
+  <meta name="theme-color" content="#0b1220" />
 </head>
 
 <body>
-  <div class="bg"></div>
-
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo">🍎</div>
-      <div class="brandText">
-        <div class="title">Food Classifier</div>
-        <div class="subtitle">1 fps • 60 sec majority vote</div>
-      </div>
-    </div>
-
-    <div class="pill" id="apiPill" title="API base url">API: —</div>
-  </header>
-
-  <main class="wrap">
-    <section class="grid">
-      <!-- LEFT: INPUT -->
-      <div class="card">
-        <div class="cardHead">
-          <div class="cardTitle">Input</div>
-          <div class="seg">
-            <button class="segBtn isActive" id="tabCamera" type="button">Camera</button>
-            <button class="segBtn" id="tabUpload" type="button">Upload</button>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🍏</div>
+        <div class="brand-text">
+          <div class="title">Food Classifier</div>
+          <div class="subtitle">
+            <span class="dot" id="statusDot" aria-hidden="true"></span>
+            <span id="statusText">Idle</span>
+            <span class="sep">•</span>
+            <span class="badge" id="fpsBadge">1 FPS</span>
           </div>
         </div>
-
-        <!-- Camera panel -->
-        <div id="panelCamera" class="panel">
-          <div class="videoBox">
-            <video id="video" playsinline autoplay muted></video>
-            <canvas id="canvas" class="hidden"></canvas>
-
-            <div class="videoOverlay">
-              <div class="badge" id="fpsBadge">1 fps</div>
-              <div class="badge" id="minuteBadge">00:60</div>
-            </div>
-          </div>
-
-          <div class="controls">
-            <div class="field">
-              <label for="topKCam">Top-K</label>
-              <input id="topKCam" type="number" min="1" max="10" value="3" />
-            </div>
-
-            <button class="btn primary" id="btnStart" type="button">Start</button>
-            <button class="btn" id="btnStop" type="button" disabled>Stop</button>
-          </div>
-
-          <div class="hint">
-            Tip: On phone, allow camera permission. Use good lighting.
-          </div>
-        </div>
-
-        <!-- Upload panel -->
-        <div id="panelUpload" class="panel hidden">
-          <label class="drop">
-            <input id="fileInput" type="file" accept="image/*" />
-            <div class="dropInner">
-              <div class="dropIcon">📷</div>
-              <div class="dropText">
-                <div class="dropTitle">Tap to choose an image</div>
-                <div class="dropSub">jpg / png / webp</div>
-              </div>
-            </div>
-          </label>
-
-          <div class="previewRow">
-            <img id="previewImg" class="previewImg hidden" alt="preview" />
-            <div id="previewEmpty" class="previewEmpty">No image selected</div>
-          </div>
-
-          <div class="controls">
-            <div class="field">
-              <label for="topKUpload">Top-K</label>
-              <input id="topKUpload" type="number" min="1" max="10" value="3" />
-            </div>
-
-            <button class="btn primary" id="btnPredict" type="button" disabled>Predict</button>
-          </div>
-        </div>
-
-        <details class="advanced">
-          <summary>Advanced</summary>
-          <p>
-            This UI uses:
-            <code>window.API_BASE</code>
-            set below.
-          </p>
-          <p class="small">
-            If you ever need to change it, edit the line in this HTML.
-          </p>
-        </details>
       </div>
 
-      <!-- RIGHT: RESULTS -->
-      <div class="card">
-        <div class="cardHead">
-          <div class="cardTitle">Result</div>
-          <div class="status" id="status">Ready.</div>
-        </div>
-
-        <div class="resultGrid">
-          <div class="big">
-            <div class="bigLabel">Minute verdict</div>
-            <div class="bigValue" id="minuteLabel">—</div>
-            <div class="bigSub" id="minuteSub">Start camera to collect votes.</div>
-          </div>
-
-          <div class="mini">
-            <div class="miniLabel">Last frame</div>
-            <div class="miniValue" id="lastFrameLabel">—</div>
-            <div class="miniSub" id="lastFrameConf">—</div>
-          </div>
-        </div>
-
-        <div class="barWrap">
-          <div class="barTop">
-            <div class="barTitle">Votes this minute</div>
-            <div class="barCount" id="voteCount">0 / 60</div>
-          </div>
-          <div class="progress">
-            <div class="progressFill" id="progressFill"></div>
-          </div>
-        </div>
-
-        <div class="listHead">
-          <div>Top labels (votes)</div>
-          <div class="muted">updates while collecting</div>
-        </div>
-
-        <ul class="list" id="voteList"></ul>
-
-        <div class="links">
-          <a href="https://elgatito1-food-classifier.hf.space/docs" target="_blank" rel="noreferrer">API Docs</a>
-          <span class="dot">•</span>
-          <a href="https://elgatito1-food-classifier.hf.space/health" target="_blank" rel="noreferrer">Health</a>
-        </div>
+      <div class="top-actions">
+        <button class="btn ghost" id="switchBtn" type="button" title="Switch camera">
+          🔁 <span class="btn-text">Camera</span>
+        </button>
       </div>
-    </section>
+    </header>
 
-    <footer class="foot">
-      Made for mobile • Majority vote every minute • 1 frame per second
+    <main class="grid">
+      <!-- Camera card -->
+      <section class="card camera-card">
+        <div class="card-head">
+          <div class="card-title">Camera</div>
+          <div class="card-hint">We send 1 frame/sec to your API.</div>
+        </div>
+
+        <div class="camera-wrap">
+          <video id="video" autoplay playsinline muted></video>
+          <div class="camera-overlay">
+            <div class="overlay-pill" id="overlayText">Tap Start</div>
+          </div>
+        </div>
+
+        <canvas id="canvas" class="hidden"></canvas>
+
+        <div class="controls">
+          <button class="btn primary" id="startBtn" type="button">▶ Start</button>
+          <button class="btn danger" id="stopBtn" type="button" disabled>⏸ Stop</button>
+        </div>
+
+        <div class="error-box hidden" id="errorBox" role="alert"></div>
+      </section>
+
+      <!-- Results -->
+      <section class="card results-card">
+        <div class="card-head">
+          <div class="card-title">Live Result</div>
+          <div class="card-hint">Updates every frame.</div>
+        </div>
+
+        <div class="live-result">
+          <div class="big" id="currentLabel">—</div>
+          <div class="small">
+            Confidence: <span id="currentConf">—</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="card-head">
+          <div class="card-title">Top-K</div>
+          <div class="card-hint">Top 3 predictions.</div>
+        </div>
+
+        <ul class="topk" id="topKList">
+          <li class="muted">Waiting…</li>
+        </ul>
+      </section>
+
+      <!-- Minute verdict -->
+      <section class="card verdict-card">
+        <div class="card-head">
+          <div class="card-title">Minute Verdict</div>
+          <div class="card-hint">Most frequent label over the last 60 seconds.</div>
+        </div>
+
+        <div class="verdict">
+          <div class="verdict-label" id="minuteVerdictValue">-</div>
+          <div class="verdict-meta" id="minuteVerdictMeta">Start monitoring to begin.</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="mini">
+          <div class="mini-title">How it works</div>
+          <div class="mini-text">
+            We collect frame predictions for 60 seconds. The label that appears the most wins.
+            Then it resets for the next minute.
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>API:</span> <code id="apiBaseText">—</code>
     </footer>
-  </main>
+  </div>
 
-  <!-- IMPORTANT: use your working base -->
-  <script>
-    window.API_BASE = "https://elgatito1-food-classifier.hf.space";
-  </script>
-  <script src="./app.js"></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
